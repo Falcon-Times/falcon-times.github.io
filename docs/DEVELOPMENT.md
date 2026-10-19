@@ -43,6 +43,13 @@ Add a **new** file in `supabase/migrations/` (timestamp-prefixed); never edit on
 Add RLS tests to `supabase/tests/10_rls.test.sql`. To change starter content, edit `data/seed.json` and run
 `npm run seed:sql` (this only affects brand-new databases — existing sites edit content in the admin panel).
 
+## Dependency updates
+
+Dependabot proposes monthly minor/patch updates (grouped into one pull request) and GitHub Actions
+updates. Major upgrades of npm packages are deliberately ignored — Vite, Preact and friends usually
+need code changes. To upgrade one, do it on a branch (`npm i vite@latest`), fix what breaks, and
+make `npm run build`, `npm test` and `npm run test:e2e` pass before merging.
+
 ## Conventions
 
 [Conventional Commits](https://www.conventionalcommits.org) (`feat(newsroom): …`, `fix(db): …`), small focused

@@ -14,7 +14,7 @@ export async function loadRefs() {
   const [sections, staff, directory] = await Promise.all([
     db().from('sections').select('*').order('sort_order'),
     db().from('staff_members').select('*').order('sort_order'),
-    db().from('staff_directory').select('*'),
+    db().rpc('staff_directory'),
   ]);
   return {
     sections: unwrap(sections) as Section[],

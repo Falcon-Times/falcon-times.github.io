@@ -61,12 +61,19 @@ test.describe('public pages', () => {
       const base = (window as unknown as { __SUPABASE_URL__?: string }).__SUPABASE_URL__ ?? 'http://127.0.0.1:54330';
       const anon = await (await fetch(`${base}/__test/anon-key`)).text();
       const get = async (t: string) => (await fetch(`${base}/rest/v1/${t}?select=*`, { headers: { apikey: anon, Authorization: `Bearer ${anon}` } })).status;
-      return { tips: await get('tips'), profiles: await get('profiles'), audit: await get('audit_log'), articles: await get('articles') };
+      const rpc = async (f: string) => (await fetch(`${base}/rest/v1/rpc/${f}`, { method: 'POST', headers: { apikey: anon, Authorization: `Bearer ${anon}`, 'Content-Type': 'application/json' }, body: '{}' })).status;
+      return {
+        tips: await get('tips'), profiles: await get('profiles'), audit: await get('audit_log'), articles: await get('articles'),
+        directoryView: await get('staff_directory'),
+        // security-definer helpers live in a schema the API doesn't expose
+        isStaff: await rpc('is_staff'), editsSection: await rpc('edits_section'), canWrite: await rpc('can_write_section'), effective: await rpc('effective_role'),
+      };
     });
     expect(result.tips).toBe(401);
     expect(result.profiles).toBe(401);
     expect(result.audit).toBe(401);
     expect(result.articles).toBe(200);
+    for (const k of ['directoryView', 'isStaff', 'editsSection', 'canWrite', 'effective'] as const) expect(result[k], k).toBe(404);
   });
 });
 

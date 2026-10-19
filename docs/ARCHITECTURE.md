@@ -43,6 +43,10 @@ touch *School News*, even by crafting requests by hand — the database refuses.
 3. **Two-factor for admins.** `effective_role()` only treats someone as an admin if the session's JWT says
    `aal2` (a TOTP code was verified). A stolen admin password is therefore *worthless on its own* — it
    grants no more power than a stranger's. The same check protects the Edge Function.
+   The helper functions behind those policies (`is_staff`, `edits_section`, …) are `SECURITY DEFINER` and
+   live in a `private` schema the API does not expose, so they can't be called as `/rest/v1/rpc/…`. The few
+   things the browser needs (`cast_vote`, `record_view`, `trending_article_ids`, `is_admin`, `staff_directory`)
+   are thin `SECURITY INVOKER` wrappers in `public`. This keeps Supabase's Security Advisor clean.
 4. **Service-role key isolation.** Creating and deleting logins needs Supabase's all-powerful service-role key.
    It exists only inside the Edge Function's environment (injected by Supabase), never in this repo, GitHub, or
    a browser. The function first calls `is_admin()` with the *caller's* token.
@@ -60,6 +64,14 @@ touch *School News*, even by crafting requests by hand — the database refuses.
    ballot box. Supabase rate-limits sign-in attempts.
 
 Tested by `supabase/tests/10_rls.test.sql` (≈100 assertions run in CI) and an end-to-end browser suite.
+
+## Supabase Security Advisor
+
+Run it from *Advisors → Security Advisor* after deploying. Expected result: no errors and no function warnings.
+One warning may remain: **Leaked Password Protection Disabled**. That is a Supabase dashboard setting
+(*Authentication → Sign In / Providers → Email*) and is only available on paid plans. It's low risk here
+because accounts are created by admins with random temporary passwords, members must choose 12+ characters,
+and admins also need a second factor. Enable it if you ever upgrade.
 
 ## Secrets: what lives where
 

@@ -269,6 +269,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { id: u.id });
     }
     if (path === '/__test/health') return send(res, 200, { ok: true });
+    if (path === '/__test/anon-key') return send(res, 200, Buffer.from(ANON_KEY));
     return err(res, 404, `no route for ${req.method} ${path}`);
   } catch (e) {
     console.error('[harness]', e);

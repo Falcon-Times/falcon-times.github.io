@@ -1,0 +1,11 @@
+# Supabase CLI configuration (used by `supabase link`, `db push` and `functions deploy`).
+project_id = "falcon-times"
+
+[db]
+major_version = 17
+
+# admin-users checks the caller itself (is_admin() requires a signed-in admin
+# with a verified second factor), which also works with Supabase's newer
+# asymmetric JWT signing keys. The platform-level check is therefore redundant.
+[functions.admin-users]
+verify_jwt = false

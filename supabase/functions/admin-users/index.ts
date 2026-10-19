@@ -8,7 +8,8 @@
 // is_admin() function), so a stolen password alone cannot call it.
 import { createClient } from '@supabase/supabase-js';
 
-const cors = {
+// Callers authenticate with a bearer token (not cookies), so a wildcard origin is safe.
+const cors: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -29,7 +30,11 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  if (req.method === 'OPTIONS') {
+    // Echo whatever headers the browser says it will send (supabase-js adds a few of its own).
+    const asked = req.headers.get('Access-Control-Request-Headers');
+    return new Response('ok', { headers: { ...cors, ...(asked ? { 'Access-Control-Allow-Headers': asked } : {}) } });
+  }
   if (req.method !== 'POST') return json(405, { error: 'POST only.' });
 
   try {

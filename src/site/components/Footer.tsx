@@ -7,7 +7,7 @@ import { openTipLine } from './Tip';
 export function Footer() {
   const { site, sections } = useNews();
   const s = site.settings;
-  const social = Object.entries(s.social).filter(([, v]) => v);
+  const social = Object.entries(s.social).filter(([, v]) => /^https?:\/\//i.test(v));
   return (
     <footer class="footer">
       <div class="wrap">

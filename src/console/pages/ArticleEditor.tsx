@@ -152,6 +152,9 @@ export function ArticleEditor({ id }: { id: string | null }) {
           <button class="btn btn-sm btn-ghost" onClick={() => { drafts.remove(draftKey); setRestore(null); }}>Discard</button>
         </div>
       )}
+      {isNew && mySections.length === 0 && (
+        <div class="notice notice-warn"><Icon name="warning" />You haven’t been assigned to a section yet, so you can’t start a story. Ask an admin to add you to one.</div>
+      )}
       {locked && <div class="notice notice-warn"><Icon name="lock" />This story has been published, so only your section leader can change it. Ask them to make edits, or leave a note below.</div>}
 
       <div class="editor-grid">

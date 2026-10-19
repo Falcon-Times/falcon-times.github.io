@@ -1,0 +1,606 @@
+{
+  "settings": {
+    "site": {
+      "name": "The Falcon Times",
+      "tagline": "The student voice of Avon High School",
+      "school": "Avon High School",
+      "address": "510 West Avon Road, Avon, CT 06001",
+      "latitude": 41.8087,
+      "longitude": -72.8307,
+      "place": "Avon, CT"
+    },
+    "contact": {
+      "email": ""
+    },
+    "social": {
+      "instagram": "",
+      "tiktok": "",
+      "youtube": "",
+      "x": ""
+    },
+    "hotline": {
+      "enabled": true,
+      "intro": "Send us a story idea, a correction, a letter to the editor or a shout-out. You can stay completely anonymous. Only our editors can read what you send."
+    },
+    "standards": {
+      "points": [
+        "Every article is stamped with the date and time it was published.",
+        "Updates and corrections are announced at the top of the article.",
+        "Original photography, credited to the photographer.",
+        "No open comment sections. Respond with a Letter to the Editor or send us a tip.",
+        "Tips can be anonymous. We never publish what you send without your permission."
+      ]
+    }
+  },
+  "sections": [
+    {
+      "id": "school-news",
+      "name": "School News",
+      "icon": "school",
+      "sort_order": 10,
+      "description": "What's happening at Avon High School — policies, programs, clubs and the Avon community.",
+      "subsections": [
+        "Administration & Policy",
+        "Clubs & Activities",
+        "Academics",
+        "Avon & Community"
+      ]
+    },
+    {
+      "id": "sports",
+      "name": "Sports",
+      "icon": "trophy",
+      "sort_order": 20,
+      "description": "Scores, recaps and athlete spotlights for every Falcon team.",
+      "subsections": [
+        "Fall",
+        "Winter",
+        "Spring",
+        "Athlete Spotlights"
+      ]
+    },
+    {
+      "id": "opinion-advice",
+      "name": "Opinion + Advice",
+      "icon": "pen",
+      "sort_order": 30,
+      "description": "Editorials, student voices, letters to the editor and advice you can actually use.",
+      "subsections": [
+        "Staff Editorials",
+        "Student Voices",
+        "Letters to the Editor",
+        "Advice"
+      ]
+    },
+    {
+      "id": "culture-entertainment",
+      "name": "Culture + Entertainment",
+      "icon": "masks",
+      "sort_order": 40,
+      "description": "Music, film, books, games, performances and everything students are into right now.",
+      "subsections": [
+        "Music",
+        "Film & TV",
+        "Books & Games",
+        "Arts & Performances"
+      ]
+    },
+    {
+      "id": "social-media",
+      "name": "Social Media",
+      "icon": "phone",
+      "sort_order": 50,
+      "description": "Highlights from our social channels, behind-the-scenes looks and what's trending in the halls.",
+      "subsections": [
+        "Highlights",
+        "Behind the Scenes",
+        "Trending"
+      ]
+    },
+    {
+      "id": "photo-video",
+      "name": "Photography + Video",
+      "icon": "camera",
+      "sort_order": 60,
+      "description": "Photo essays, event galleries and video from around campus.",
+      "subsections": [
+        "Photo Essays",
+        "Event Galleries",
+        "Video"
+      ]
+    },
+    {
+      "id": "layout-design",
+      "name": "Layout + Design",
+      "icon": "layout",
+      "sort_order": 70,
+      "active": false,
+      "description": "The team behind the look and feel of The Falcon Times.",
+      "subsections": []
+    }
+  ],
+  "quotes": [
+    {
+      "text": "Journalism can never be silent: that is its greatest virtue and its greatest fault.",
+      "attribution": "Henry Anatole Grunwald",
+      "sort_order": 10
+    },
+    {
+      "text": "The way to right wrongs is to turn the light of truth upon them.",
+      "attribution": "Ida B. Wells",
+      "sort_order": 20
+    },
+    {
+      "text": "Freedom of the press is not just important to democracy, it is democracy.",
+      "attribution": "Walter Cronkite",
+      "sort_order": 30
+    },
+    {
+      "text": "Write what should not be forgotten.",
+      "attribution": "Isabel Allende",
+      "sort_order": 40
+    },
+    {
+      "text": "If you don't like the news, go out and make some of your own.",
+      "attribution": "Wes “Scoop” Nisker",
+      "sort_order": 50
+    },
+    {
+      "text": "There is no greater agony than bearing an untold story inside you.",
+      "attribution": "Maya Angelou",
+      "sort_order": 60
+    }
+  ],
+  "staff": [
+    {
+      "slug": "srishti-goel",
+      "name": "Srishti Goel",
+      "title": "Section Leader",
+      "sections": [
+        "school-news"
+      ],
+      "lead_of": [
+        "school-news"
+      ],
+      "bio": "",
+      "sort_order": 10
+    },
+    {
+      "slug": "molly-krenicky",
+      "name": "Molly Krenicky",
+      "title": "Section Leader",
+      "sections": [
+        "sports"
+      ],
+      "lead_of": [
+        "sports"
+      ],
+      "bio": "",
+      "sort_order": 20
+    },
+    {
+      "slug": "ashley-hazel",
+      "name": "Ashley Hazel",
+      "title": "Section Leader",
+      "sections": [
+        "opinion-advice"
+      ],
+      "lead_of": [
+        "opinion-advice"
+      ],
+      "bio": "",
+      "sort_order": 30
+    },
+    {
+      "slug": "brenna-kehn",
+      "name": "Brenna Kehn",
+      "title": "Section Leader",
+      "sections": [
+        "culture-entertainment"
+      ],
+      "lead_of": [
+        "culture-entertainment"
+      ],
+      "bio": "",
+      "sort_order": 40
+    },
+    {
+      "slug": "charlie-cox",
+      "name": "Charlie Cox",
+      "title": "Section Leader",
+      "sections": [
+        "social-media"
+      ],
+      "lead_of": [
+        "social-media"
+      ],
+      "bio": "",
+      "sort_order": 50
+    },
+    {
+      "slug": "daniella-ravitz",
+      "name": "Daniella Ravitz",
+      "title": "Section Leader",
+      "sections": [
+        "photo-video"
+      ],
+      "lead_of": [
+        "photo-video"
+      ],
+      "bio": "",
+      "sort_order": 60
+    },
+    {
+      "slug": "christopher-salvaggio",
+      "name": "Christopher Salvaggio",
+      "title": "Section Leader",
+      "sections": [
+        "layout-design"
+      ],
+      "lead_of": [
+        "layout-design"
+      ],
+      "bio": "",
+      "sort_order": 70
+    },
+    {
+      "slug": "anushka-bhattacharjee",
+      "name": "Anushka Bhattacharjee",
+      "title": "Staff Writer",
+      "sections": [
+        "school-news"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 80
+    },
+    {
+      "slug": "anna-chung",
+      "name": "Anna Chung",
+      "title": "Staff Writer",
+      "sections": [
+        "school-news"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 90
+    },
+    {
+      "slug": "howayna-gayle",
+      "name": "Howayna Gayle",
+      "title": "Staff Writer",
+      "sections": [
+        "school-news",
+        "social-media"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 100
+    },
+    {
+      "slug": "scout-llanas",
+      "name": "Scout LLanas",
+      "title": "Staff Writer",
+      "sections": [
+        "school-news"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 110
+    },
+    {
+      "slug": "blyth-mcclure",
+      "name": "Blyth McClure",
+      "title": "Staff Writer",
+      "sections": [
+        "school-news"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 120
+    },
+    {
+      "slug": "sabrina-probeck",
+      "name": "Sabrina Probeck",
+      "title": "Staff Writer",
+      "sections": [
+        "school-news",
+        "layout-design"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 130
+    },
+    {
+      "slug": "allison-bailey",
+      "name": "Allison Bailey",
+      "title": "Staff Writer",
+      "sections": [
+        "sports"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 140
+    },
+    {
+      "slug": "amber-niaura",
+      "name": "Amber Niaura",
+      "title": "Staff Writer",
+      "sections": [
+        "sports"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 150
+    },
+    {
+      "slug": "mackenzie-petrus",
+      "name": "Mackenzie Petrus",
+      "title": "Staff Writer",
+      "sections": [
+        "sports"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 160
+    },
+    {
+      "slug": "gabrielle-punko",
+      "name": "Gabrielle Punko",
+      "title": "Staff Writer",
+      "sections": [
+        "sports"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 170
+    },
+    {
+      "slug": "siddit-senthilkumar",
+      "name": "Siddit Senthilkumar",
+      "title": "Staff Writer",
+      "sections": [
+        "sports"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 180
+    },
+    {
+      "slug": "elizabeth-stevenson",
+      "name": "Elizabeth Stevenson",
+      "title": "Staff Writer",
+      "sections": [
+        "sports"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 190
+    },
+    {
+      "slug": "aamna",
+      "name": "Aamna",
+      "title": "Staff Writer",
+      "sections": [
+        "opinion-advice"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 200
+    },
+    {
+      "slug": "andrew-kessler",
+      "name": "Andrew Kessler",
+      "title": "Staff Writer",
+      "sections": [
+        "opinion-advice"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 210
+    },
+    {
+      "slug": "sarah-p",
+      "name": "Sarah P",
+      "title": "Staff Writer",
+      "sections": [
+        "opinion-advice"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 220
+    },
+    {
+      "slug": "navya-pratti",
+      "name": "Navya Pratti",
+      "title": "Staff Writer",
+      "sections": [
+        "opinion-advice"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 230
+    },
+    {
+      "slug": "spencer-sommaruga",
+      "name": "Spencer Sommaruga",
+      "title": "Staff Writer",
+      "sections": [
+        "opinion-advice"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 240
+    },
+    {
+      "slug": "anne-thomas",
+      "name": "Anne Thomas",
+      "title": "Staff Writer",
+      "sections": [
+        "opinion-advice"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 250
+    },
+    {
+      "slug": "mia-cimini",
+      "name": "Mia Cimini",
+      "title": "Staff Writer",
+      "sections": [
+        "culture-entertainment"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 260
+    },
+    {
+      "slug": "grace-earnest",
+      "name": "Grace Earnest",
+      "title": "Staff Writer",
+      "sections": [
+        "culture-entertainment"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 270
+    },
+    {
+      "slug": "jimin-lee",
+      "name": "Jimin Lee",
+      "title": "Staff Writer",
+      "sections": [
+        "culture-entertainment"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 280
+    },
+    {
+      "slug": "timothy-roberts",
+      "name": "Timothy Roberts",
+      "title": "Staff Writer",
+      "sections": [
+        "culture-entertainment"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 290
+    },
+    {
+      "slug": "shirish",
+      "name": "Shirish",
+      "title": "Staff Writer",
+      "sections": [
+        "culture-entertainment"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 300
+    },
+    {
+      "slug": "elizabeth-kosovskiy",
+      "name": "Elizabeth Kosovskiy",
+      "title": "Social Media Team",
+      "sections": [
+        "social-media"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 310
+    },
+    {
+      "slug": "gabe-avila",
+      "name": "Gabe Avila",
+      "title": "Photography + Video Team",
+      "sections": [
+        "photo-video"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 320
+    },
+    {
+      "slug": "jordyn-dunham",
+      "name": "Jordyn Dunham",
+      "title": "Photography + Video Team",
+      "sections": [
+        "photo-video"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 330
+    },
+    {
+      "slug": "caitlyn-champlin",
+      "name": "Caitlyn Champlin",
+      "title": "Layout + Design Team",
+      "sections": [
+        "layout-design"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 340
+    },
+    {
+      "slug": "khloe-sin",
+      "name": "Khloe Sin",
+      "title": "Layout + Design Team",
+      "sections": [
+        "layout-design"
+      ],
+      "lead_of": [],
+      "bio": "",
+      "sort_order": 350
+    }
+  ],
+  "polls": [
+    {
+      "category": "The Falcon Times",
+      "question": "Which section are you most excited to read?",
+      "options": [
+        {
+          "id": "school-news",
+          "label": "School News"
+        },
+        {
+          "id": "sports",
+          "label": "Sports"
+        },
+        {
+          "id": "opinion-advice",
+          "label": "Opinion + Advice"
+        },
+        {
+          "id": "culture-entertainment",
+          "label": "Culture + Entertainment"
+        },
+        {
+          "id": "social-media",
+          "label": "Social Media"
+        },
+        {
+          "id": "photo-video",
+          "label": "Photography + Video"
+        }
+      ]
+    }
+  ],
+  "articles": [
+    {
+      "slug": "welcome-to-the-falcon-times",
+      "title": "Welcome to the new Falcon Times",
+      "deck": "Avon High School’s student newspaper has a new home, a new team, and a way for every student to be heard.",
+      "section_id": "school-news",
+      "subsection": "Clubs & Activities",
+      "status": "published",
+      "is_lead": true,
+      "published_at": "2026-10-18T12:00:00-04:00",
+      "body_md": "The Falcon Times is the student newspaper of Avon High School, written, photographed, designed and published by the Avon High School Newspaper Club. This is the first issue of our new home on the web, and we're glad you're here.\n\n## What you'll find here\n\nOur reporters and editors are organized into teams, each with a section leader:\n\n- **School News** — policies, programs, clubs and life across Avon.\n- **Sports** — scores, recaps and athlete spotlights for every Falcon team.\n- **Opinion + Advice** — editorials, student voices, letters to the editor and advice.\n- **Culture + Entertainment** — music, film, books, games and the arts.\n- **Social Media** — highlights from our channels and what's trending in the halls.\n- **Photography + Video** — photo essays, galleries and video.\n\nBehind the scenes, our **Layout + Design** team builds and maintains the site you're reading right now.\n\n## How we work\n\nEvery story we publish is stamped with the date and time it went live. If we update a story after publication, we say so right at the top, along with what changed. If we get something wrong, we'll fix it and tell you.\n\nWe don't run open comment sections. Instead, you can send a **Letter to the Editor**, vote in our **polls**, or use our **tip line**.\n\n## Tell us something\n\nKnow about a story we should cover? Spotted a mistake? Want to shout out a teammate? Use the **Tip Line** at the top of any page. You can stay completely anonymous — leave contact details only if you'd like us to follow up.\n\nInterested in writing, shooting photos or video, designing, or running social media? Talk to any section leader or come find us at a club meeting.",
+      "tags": [
+        "welcome",
+        "newspaper club"
+      ]
+    }
+  ]
+}

@@ -10,7 +10,14 @@
 .topbar-in { display: flex; align-items: center; gap: 16px; min-height: 40px; padding-block: 4px; }
 .ticker { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .ticker-label { display: inline-flex; align-items: center; gap: 5px; flex: none; background: var(--gold); color: var(--navy); font-weight: 800; font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 5px; }
-.ticker-text { font-family: var(--font-display); font-style: italic; font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; animation: fade 0.6s ease; min-width: 0; }
+.ticker-view { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.ticker-view.fades { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+.ticker-text { display: inline-block; white-space: nowrap; font-family: var(--font-display); font-style: italic; font-size: 0.92rem; animation: fade 0.6s ease; will-change: transform; }
+/* Quotes wider than the bar glide to the end (after a beat), then the ticker moves on. */
+.ticker-text.scroll { animation: ticker-scroll var(--dur, 6s) linear 1.5s both; }
+.ticker-text.scroll.hold { animation-play-state: paused; }
+@keyframes ticker-scroll { to { transform: translateX(calc(var(--shift) * -1)); } }
+@media (prefers-reduced-motion: reduce) { .ticker-text { white-space: normal; animation: none; } }
 .ticker-by { font-family: var(--font-ui); font-style: normal; opacity: 0.75; font-size: 0.78rem; }
 .ticker-ctl { display: inline-flex; flex: none; }
 .ticker-ctl button, .topbar-btn { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; color: inherit; padding: 5px 7px; border-radius: 6px; font-size: inherit; font-weight: 500; }
@@ -55,8 +62,9 @@ a.announce-in:hover { text-decoration: underline; }
 .nav-link.active { color: var(--navy); border-bottom-color: var(--navy); }
 .nav-caret { background: none; border: 0; padding: 6px 4px 6px 0; margin-left: -8px; color: var(--muted); display: inline-flex; border-radius: 6px; }
 .nav-caret:hover { color: var(--navy); }
-.dropdown { position: absolute; top: calc(100% - 2px); left: 0; min-width: 220px; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--shadow-lift); padding: 8px; opacity: 0; visibility: hidden; transform: translateY(6px); transition: all 0.18s var(--ease); z-index: 60; }
+.dropdown { position: absolute; top: calc(100% + 3px); left: 0; min-width: 220px; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--shadow-lift); padding: 8px; opacity: 0; visibility: hidden; transform: translateY(6px); transition: all 0.18s var(--ease); z-index: 60; }
 .nav-item:hover > .dropdown, .nav-item:focus-within > .dropdown, .nav-item.open > .dropdown { opacity: 1; visibility: visible; transform: none; }
+.dropdown::before { content: ''; position: absolute; left: 0; right: 0; top: -8px; height: 8px; } /* keeps :hover alive across the gap, so the active underline stays visible */
 .dropdown a { display: block; padding: 8px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: 0.88rem; font-weight: 550; }
 .dropdown a:hover { background: var(--info-bg); color: var(--navy); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .nav-link.active, :root:not([data-theme='light']) .nav-link:hover { color: var(--gold); } }
@@ -69,6 +77,7 @@ a.announce-in:hover { text-decoration: underline; }
   .nav-link { flex: 1; border: 0; margin: 0; padding: 12px 4px; }
   .nav-caret { margin: 0; padding: 12px; }
   .dropdown { position: static; width: 100%; opacity: 1; visibility: visible; transform: none; box-shadow: none; border: 0; padding: 0 0 8px 12px; display: none; background: none; }
+  .dropdown::before { display: none; }
   .nav-item.open > .dropdown { display: block; }
   .nav-item:hover > .dropdown { display: none; }
   .nav-item.open:hover > .dropdown { display: block; }
@@ -266,6 +275,4 @@ a.announce-in:hover { text-decoration: underline; }
 .cover-lead:has(.cover-ph) { aspect-ratio: auto; height: 150px; }
 .cover-lead .cover-ph { flex-direction: row; }
 
-@media (max-width: 700px) {
-  .ticker-text { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; font-size: 0.85rem; line-height: 1.25; }
-}
+

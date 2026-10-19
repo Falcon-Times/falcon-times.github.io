@@ -1,12 +1,8 @@
 /* The public newspaper ---------------------------------------------------- */
-.hide-md { display: initial; }
 @media (max-width: 899px) { .hide-md { display: none !important; } }
 @media (max-width: 560px) { .hide-sm { display: none !important; } }
 
 .main { padding-block: 28px 64px; flex: 1; outline: none; }
-.state { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 48px 16px; color: var(--muted); }
-.state-empty { flex-direction: column; text-align: center; background: var(--surface); border: 1px dashed var(--rule-strong); border-radius: var(--radius); }
-.state-empty h3 { font-size: 1.25rem; color: var(--ink); }
 .offline { margin-top: 16px; }
 
 /* Top bar */
@@ -269,3 +265,7 @@ a.announce-in:hover { text-decoration: underline; }
 /* A story without a photo shouldn't hog the front page */
 .cover-lead:has(.cover-ph) { aspect-ratio: auto; height: 150px; }
 .cover-lead .cover-ph { flex-direction: row; }
+
+@media (max-width: 700px) {
+  .ticker-text { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; font-size: 0.85rem; line-height: 1.25; }
+}

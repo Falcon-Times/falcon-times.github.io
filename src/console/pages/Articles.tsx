@@ -22,7 +22,13 @@ export function Articles() {
   const [section, setSection] = useState('');
   const [q, setQ] = useState('');
   const [tick, setTick] = useState(0);
-  useEffect(() => { listArticles().then(setRows).catch(setError); }, [tick]);
+  useEffect(() => {
+    listArticles().then((r) => {
+      setRows(r);
+      // Start on the review queue only when there is something in it.
+      if (tick === 0 && me.isEditor && !r.some((a) => a.status === 'submitted')) setTab('all');
+    }).catch(setError);
+  }, [tick]);
 
   // RLS lets everyone read published stories; here we narrow to "my work".
   const mine = useMemo(() => (rows ?? []).filter((a) =>

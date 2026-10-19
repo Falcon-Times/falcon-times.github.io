@@ -194,7 +194,7 @@ export function MfaEnroll({ forced = false, onDone, onCancel }: { forced?: boole
       // Clear half-finished enrolments so re-tries don't collide.
       const { data: factors } = await db.auth.mfa.listFactors();
       for (const f of factors?.all ?? []) if (f.status === 'unverified') await db.auth.mfa.unenroll({ factorId: f.id });
-      const { data, error: err } = await db.auth.mfa.enroll({ factorType: 'totp', friendlyName: `Authenticator ${new Date().toISOString().slice(0, 10)}` });
+      const { data, error: err } = await db.auth.mfa.enroll({ factorType: 'totp', friendlyName: `Authenticator ${Math.random().toString(36).slice(2, 6)}` });
       if (err || !data) { setError(err?.message ?? 'Could not start two-factor setup.'); return; }
       setInfo({ id: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
     })();

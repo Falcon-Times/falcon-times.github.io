@@ -156,8 +156,9 @@ export function ArticleEditor({ id }: { id: string | null }) {
 
       <div class="editor-grid">
         <div class="stack" style={{ '--stack': '16px' }}>
-          <input class="title-input" placeholder="Headline" value={form.title} maxLength={200} disabled={locked}
-            onInput={(e) => set('title', (e.target as HTMLInputElement).value)} aria-label="Headline" />
+          <textarea class="title-input" placeholder="Headline" value={form.title} maxLength={200} disabled={locked} rows={1}
+            ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } }}
+            onInput={(e) => set('title', (e.target as HTMLTextAreaElement).value.replace(/\n/g, ' '))} aria-label="Headline" />
           <TextArea label="Summary line (deck)" value={form.deck} onChange={(v) => set('deck', v)} rows={2} max={400} hint="One or two sentences that make someone want to read on." />
           <div class="md-box">
             <div class="md-tabs" role="tablist">

@@ -3,9 +3,18 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule: { interval: monthly }
+    # Major upgrades of the build/UI toolchain (Vite, Preact, TypeScript, …) usually need
+    # code changes, so they are done by hand rather than as surprise pull requests.
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
     groups:
       minor-and-patch:
         update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
+    groups:
+      # These two must move together.
+      github-pages:
+        patterns: ['actions/upload-pages-artifact', 'actions/deploy-pages']

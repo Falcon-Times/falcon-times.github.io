@@ -232,7 +232,8 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, publicUser(u));
       }
       if (path === '/auth/v1/admin/users' && req.method === 'GET') {
-        return send(res, 200, { users: [...users.values()].map(publicUser), aud: 'authenticated' });
+        // Like real GoTrue, the list endpoint does not include each user's factors.
+        return send(res, 200, { users: [...users.values()].map((u) => ({ ...publicUser(u), factors: [] })), aud: 'authenticated' });
       }
       if ((m = path.match(/^\/auth\/v1\/admin\/users\/([^/]+)$/))) {
         const u = users.get(m[1]);

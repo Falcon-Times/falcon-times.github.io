@@ -18,7 +18,16 @@ logins, and a handful of GitHub Secrets connecting the two.
 1. Sign up at <https://supabase.com> (free) and **New project**. Pick a region near Connecticut
    (e.g. *East US (N. Virginia)*).
 2. Choose a strong **database password** and save it in your password manager — you'll need it in step 3.
-3. When it's ready, note these (all under **Project Settings**):
+3. When creating the project, in the **Security** section choose:
+
+   | Setting | Choose | Why |
+   | --- | --- | --- |
+   | Enable Data API | **On** | the site talks to the database through it |
+   | Automatically expose new tables | **Off** (recommended) | nothing is reachable unless the migrations grant it — they grant exactly what the site needs (the setup also works if you leave it on) |
+   | Enable automatic RLS | **On** | any table added later starts locked down (row-level security on) until you write a policy |
+
+   These can be changed later under **Project Settings → Data API**.
+4. When it's ready, note these (all under **Project Settings**):
    * **Project URL** — *API* page, looks like `https://abcdxyz.supabase.co`
    * **Project ref** — the `abcdxyz` part of that URL
    * **anon / publishable key** — *API Keys* page (the one marked *public* / *anon*; **not** `service_role`/secret)

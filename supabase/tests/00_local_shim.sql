@@ -11,12 +11,21 @@ begin
 end $$;
 grant anon, authenticated, service_role to authenticator;
 
--- Real Supabase grants new public objects to these roles by default; the
--- migrations then revoke what the public API must not touch. Mirror that so
--- the tests prove the revokes work.
+-- Supabase's "Automatically expose new tables" setting. When ON (the platform
+-- default) new public objects are granted to the API roles; the migrations then
+-- revoke what must stay private. When OFF (recommended) nothing is granted by
+-- default and the migrations' explicit grants must be sufficient. Tests run both.
+--   psql -v auto_expose=on|off  (default off)
+\if :{?auto_expose}
+\else
+  \set auto_expose off
+\endif
+select :'auto_expose' = 'on' as expose \gset
+\if :expose
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
 alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+\endif
 grant usage on schema public to anon, authenticated, service_role;
 
 create schema if not exists auth;

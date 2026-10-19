@@ -82,7 +82,7 @@ jobs:
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:5173/ > /dev/null && break; sleep 1; done
       - run: npx playwright test
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-debug
           path: |

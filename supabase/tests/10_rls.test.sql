@@ -115,13 +115,22 @@ select tests.eq((select count(*) from public.trending_article_ids(4)), 1::bigint
 select tests.eq((select views from public.trending_article_ids(4) limit 1), 2::bigint, 'trending counts views');
 select tests.fails('select public.bootstrap_admin(''admin@example.test'')', 'anon cannot call bootstrap_admin', 'permission denied');
 
+-- the API-visible surface: private helpers aren't in public, and anon can't read the colleague list
+select tests.eq((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                 where n.nspname = 'public' and p.prosecdef
+                   and p.proname in ('effective_role','is_staff','is_editor','my_sections','can_write_section','edits_section','my_staff_member_id','cast_vote','record_view','trending_article_ids','staff_directory','is_admin')), 0::bigint,
+  'no SECURITY DEFINER helper is exposed in the public schema');
+select tests.fails('select * from public.staff_directory()', 'anon cannot list colleagues', 'permission denied');
+select tests.fails('select private.staff_directory()', 'anon cannot call the private directory function', 'permission denied');
+select tests.fails('select public.is_admin()', 'anon cannot call the is_admin wrapper', 'permission denied');
+
 -- ------------------------------------------------------------ no profile / inactive
 select tests.login('00000000-0000-0000-0000-000000000006');
-select tests.eq(public.is_staff(), false, 'user without profile has no staff rights');
+select tests.eq(private.is_staff(), false, 'user without profile has no staff rights');
 select tests.fails($$insert into public.articles (slug, title, section_id, created_by) values ('np','np','sports','00000000-0000-0000-0000-000000000006')$$, 'user without profile cannot write', 'row-level security');
 select tests.eq(tests.count('select 1 from public.tips'), 0::bigint, 'user without profile reads no tips');
 select tests.login('00000000-0000-0000-0000-000000000007');
-select tests.eq(public.is_staff(), false, 'inactive account has no rights');
+select tests.eq(private.is_staff(), false, 'inactive account has no rights');
 
 -- ------------------------------------------------------------ writer (school news)
 select tests.login('00000000-0000-0000-0000-000000000004');
@@ -156,7 +165,7 @@ select tests.fails($$insert into public.polls (question, options) values ('q?', 
 insert into public.article_comments (article_id, author_id, body) values ('a0000000-0000-0000-0000-000000000002', auth.uid(), 'Question for the editor');
 select tests.fails($$insert into public.article_comments (article_id, author_id, body) values ('a0000000-0000-0000-0000-000000000003', auth.uid(), 'Comment on someone else''s draft')$$, 'writer cannot comment on unrelated drafts', 'row-level security');
 -- writer's staff bio
-select tests.eq(tests.count('select 1 from public.staff_directory'), 6::bigint, 'staff directory lists colleagues (no emails)');
+select tests.eq(tests.count('select 1 from public.staff_directory()'), 6::bigint, 'staff directory lists colleagues (no emails)');
 
 -- ------------------------------------------------------------ other writer (sports)
 select tests.login('00000000-0000-0000-0000-000000000005');
@@ -202,7 +211,7 @@ select tests.eq(tests.count('select 1 from public.tips'), 3::bigint, 'sports edi
 -- ------------------------------------------------------------ admin, password only (no 2FA yet)
 select tests.login('00000000-0000-0000-0000-000000000001', 'aal1');
 select tests.eq(public.is_admin(), false, 'admin without 2FA has no admin rights');
-select tests.eq(public.is_staff(), false, 'admin without 2FA has no staff rights either');
+select tests.eq(private.is_staff(), false, 'admin without 2FA has no staff rights either');
 select tests.eq(tests.count('select 1 from public.profiles'), 1::bigint, 'admin without 2FA only sees own profile');
 select tests.eq(tests.count('select 1 from public.tips'), 0::bigint, 'admin without 2FA cannot read tips');
 select tests.affects($$update public.sections set name = 'Hacked' where id = 'sports'$$, 0, 'admin without 2FA cannot edit sections');

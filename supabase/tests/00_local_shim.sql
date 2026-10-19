@@ -11,6 +11,14 @@ begin
 end $$;
 grant anon, authenticated, service_role to authenticator;
 
+-- Real Supabase grants new public objects to these roles by default; the
+-- migrations then revoke what the public API must not touch. Mirror that so
+-- the tests prove the revokes work.
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+grant usage on schema public to anon, authenticated, service_role;
+
 create schema if not exists auth;
 create table if not exists auth.users (
   id uuid primary key default gen_random_uuid(),

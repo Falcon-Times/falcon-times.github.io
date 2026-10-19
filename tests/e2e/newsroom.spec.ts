@@ -82,6 +82,10 @@ test('admin creates a writer and a section leader', async ({ browser }) => {
 
 test('writer: forced password change, drafts and submits a story', async ({ browser }) => {
   const page = await newPage(browser);
+  const diag: string[] = [];
+  page.on('console', (m) => { if (['error', 'warning'].includes(m.type())) diag.push(`console.${m.type()}: ${m.text()}`); });
+  page.on('pageerror', (e) => diag.push(`pageerror: ${e.message}`));
+  page.on('response', (r) => { if (r.status() >= 400) diag.push(`${r.status()} ${r.request().method()} ${r.url().replace(/\?.*/, '')}`); });
   await signIn(page, '/newsroom/', WRITER.email, WRITER.temp);
   await expect(page.getByRole('heading', { name: 'Choose your own password' })).toBeVisible();
   await page.getByLabel(/^New password/).fill('short');
@@ -110,7 +114,13 @@ test('writer: forced password change, drafts and submits a story', async ({ brow
   await expect(page.getByRole('button', { name: /Publish/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Submit for review' }).click();
   // Assert on the durable state (the status badge), not the short-lived toast.
-  await expect(page.locator('.editor-top .badge', { hasText: 'In review' })).toBeVisible();
+  try {
+    await expect(page.locator('.editor-top .badge', { hasText: 'In review' })).toBeVisible();
+  } catch (e) {
+    // Make CI failures self-explanatory (the trace artifact isn't always reachable).
+    const visible = (sel: string) => page.locator(sel).allInnerTexts().catch(() => []);
+    throw new Error(`${(e as Error).message}\n--- diagnostics ---\nurl: ${page.url()}\ntoasts: ${JSON.stringify(await visible('.toasts'))}\nbadges: ${JSON.stringify(await visible('.badge'))}\nnotices: ${JSON.stringify(await visible('.notice'))}\n${diag.join('\n')}`);
+  }
 
   // Writers can't reach the admin panel
   await page.goto('/admin/');

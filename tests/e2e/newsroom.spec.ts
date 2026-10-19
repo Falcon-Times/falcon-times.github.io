@@ -105,7 +105,7 @@ test('writer: forced password change, drafts and submits a story', async ({ brow
   await page.getByRole('link', { name: 'Stories' }).click();
   await expect(page.getByRole('heading', { name: 'My stories' })).toBeVisible();
   await page.getByRole('link', { name: 'New story' }).first().click();
-  await page.getByLabel('Headline').fill(HEADLINE);
+  await page.getByRole('textbox', { name: 'Headline', exact: true }).fill(HEADLINE);
   await page.getByLabel('Summary line (deck)').fill('The seniors took the trophy for the third year running.');
   await page.getByLabel('Story text').fill('## The parade\n\nIt was a *great* day.\n\n<script>alert(1)</script>\n\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ');
   await page.getByRole('tab', { name: 'Preview' }).click();

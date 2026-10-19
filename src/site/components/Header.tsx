@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { formatToday } from '@/lib/format';
 import { href, navigate, type Route } from '@/lib/router';
 import { safeStorage } from '@/lib/store';
@@ -13,26 +13,56 @@ const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion:
 function QuoteTicker() {
   const { site } = useNews();
   const quotes = site.quotes;
+  const reduced = prefersReducedMotion();
   const [i, setI] = useState(() => (quotes.length ? Math.floor(Math.random() * quotes.length) : 0));
-  const [paused, setPaused] = useState(() => prefersReducedMotion());
+  const [paused, setPaused] = useState(() => reduced);
+  const [shift, setShift] = useState(0);   // px the quote overflows its window (0 = fits)
+  const [done, setDone] = useState(false); // finished scrolling to the end
+  const view = useRef<HTMLDivElement>(null);
+  const text = useRef<HTMLParagraphElement>(null);
+  const count = quotes.length;
+  const next = () => setI((n) => (n + 1) % count);
+
+  const measure = () => {
+    const v = view.current, t = text.current;
+    if (v && t) setShift(Math.max(0, Math.ceil(t.scrollWidth - v.clientWidth)));
+  };
+  // A new quote starts un-scrolled; measure whether it fits.
+  useLayoutEffect(() => { setDone(false); measure(); }, [i, count]);
   useEffect(() => {
-    if (paused || quotes.length < 2) return;
-    const t = setInterval(() => setI((n) => (n + 1) % quotes.length), 8000);
-    return () => clearInterval(t);
-  }, [paused, quotes.length]);
-  if (quotes.length === 0) return <div class="grow" />;
-  const q = quotes[i % quotes.length];
+    if (!view.current || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(view.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // Short quotes stay for 8 s; long ones scroll (CSS), rest 1.5 s at the end, then move on.
+  useEffect(() => {
+    if (paused || count < 2) return;
+    if (shift === 0) { const t = setTimeout(next, 8000); return () => clearTimeout(t); }
+    if (done) { const t = setTimeout(next, 1500); return () => clearTimeout(t); }
+  }, [i, shift, done, paused, count]);
+
+  if (count === 0) return <div class="grow" />;
+  const q = quotes[i % count];
+  const scrolling = shift > 0 && !reduced;
+  const style = scrolling ? { '--shift': `${shift}px`, '--dur': `${Math.max(3, shift / 90)}s` } as Record<string, string> : undefined;
   return (
     <div class="ticker grow" aria-label="Quote of the moment">
       <span class="ticker-label"><Icon name="sparkles" size={12} /> Daily spark</span>
-      <p class="ticker-text" key={q.id} aria-live={paused ? 'polite' : 'off'}>
-        “{q.text}” {q.attribution && <span class="ticker-by">— {q.attribution}</span>}
-      </p>
-      {quotes.length > 1 && (
+      <div class={`ticker-view ${scrolling ? 'fades' : ''}`} ref={view}>
+        <p
+          class={`ticker-text ${scrolling ? 'scroll' : ''} ${paused ? 'hold' : ''}`} key={q.id} ref={text} style={style}
+          onAnimationEnd={() => setDone(true)} aria-live={paused ? 'polite' : 'off'}
+        >
+          “{q.text}” {q.attribution && <span class="ticker-by">— {q.attribution}</span>}
+        </p>
+      </div>
+      {count > 1 && (
         <span class="ticker-ctl">
-          <button onClick={() => setI((i - 1 + quotes.length) % quotes.length)} aria-label="Previous quote"><Icon name="chevron-left" size={14} /></button>
+          <button onClick={() => setI((i - 1 + count) % count)} aria-label="Previous quote"><Icon name="chevron-left" size={14} /></button>
           <button onClick={() => setPaused(!paused)} aria-label={paused ? 'Play quotes' : 'Pause quotes'}><Icon name={paused ? 'play' : 'pause'} size={13} /></button>
-          <button onClick={() => setI((i + 1) % quotes.length)} aria-label="Next quote"><Icon name="chevron-right" size={14} /></button>
+          <button onClick={next} aria-label="Next quote"><Icon name="chevron-right" size={14} /></button>
         </span>
       )}
     </div>

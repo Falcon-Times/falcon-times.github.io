@@ -81,11 +81,23 @@ Deno.serve(async (req: Request) => {
       case 'list': {
         const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
         if (error) throw new HttpError(500, error.message);
+        // The list endpoint doesn't include each user's second factors, so ask per user
+        // (a newsroom has tens of accounts, not thousands). Failures just read as "off".
+        const hasFactor = async (userId: string): Promise<boolean> => {
+          const { data: f } = await admin.auth.admin.mfa.listFactors({ userId });
+          return (f?.factors ?? []).some((x) => x.status === 'verified');
+        };
+        const mfa = new Map<string, boolean>();
+        for (let i = 0; i < data.users.length; i += 10) {
+          const chunk = data.users.slice(i, i + 10);
+          const results = await Promise.all(chunk.map((u) => hasFactor(u.id).catch(() => false)));
+          chunk.forEach((u, j) => mfa.set(u.id, results[j]));
+        }
         const users = data.users.map((u) => ({
           id: u.id,
           last_sign_in_at: u.last_sign_in_at ?? null,
           banned: Boolean(u.banned_until && new Date(u.banned_until) > new Date()),
-          mfa: (u.factors ?? []).some((f) => f.status === 'verified'),
+          mfa: mfa.get(u.id) ?? false,
         }));
         return json(200, { users });
       }

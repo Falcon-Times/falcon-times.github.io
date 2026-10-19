@@ -77,6 +77,9 @@ test('admin creates a writer and a section leader', async ({ browser }) => {
   }
   await expect(admin.getByText(WRITER.email)).toBeVisible();
   await expect(admin.getByText(EDITOR.email)).toBeVisible();
+  // The signed-in admin enrolled in two-factor earlier, so their row must say so.
+  await expect(admin.getByRole('row', { name: new RegExp(ADMIN.email) }).getByText('On', { exact: true })).toBeVisible();
+  await expect(admin.getByRole('row', { name: new RegExp(WRITER.email) }).getByText('Off', { exact: true })).toBeVisible();
   void browser;
 });
 

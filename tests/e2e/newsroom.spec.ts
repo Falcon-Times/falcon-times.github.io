@@ -85,6 +85,7 @@ test('writer: forced password change, drafts and submits a story', async ({ brow
   const diag: string[] = [];
   page.on('console', (m) => { if (['error', 'warning'].includes(m.type())) diag.push(`console.${m.type()}: ${m.text()}`); });
   page.on('pageerror', (e) => diag.push(`pageerror: ${e.message}`));
+  page.on('request', (r) => { if (r.method() !== 'GET' && r.url().includes('/rest/v1/')) diag.push(`request: ${r.method()} ${r.url().replace(/\?.*/, '')}`); });
   page.on('response', (r) => { if (r.status() >= 400) diag.push(`${r.status()} ${r.request().method()} ${r.url().replace(/\?.*/, '')}`); });
   await signIn(page, '/newsroom/', WRITER.email, WRITER.temp);
   await expect(page.getByRole('heading', { name: 'Choose your own password' })).toBeVisible();
@@ -112,14 +113,21 @@ test('writer: forced password change, drafts and submits a story', async ({ brow
   await expect(page.locator('.preview iframe')).toHaveAttribute('src', /youtube-nocookie\.com\/embed\/dQw4w9WgXcQ/);
   await expect(page.locator('.preview script')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Publish/ })).toHaveCount(0);
+  // Toasts vanish after a few seconds; sample them so a validation message isn't missed.
+  const seenToasts = new Set<string>();
+  const sampler = setInterval(() => {
+    page.locator('.toasts .toast').allInnerTexts().then((t) => t.forEach((x) => seenToasts.add(x))).catch(() => undefined);
+  }, 100);
   await page.getByRole('button', { name: 'Submit for review' }).click();
   // Assert on the durable state (the status badge), not the short-lived toast.
   try {
     await expect(page.locator('.editor-top .badge', { hasText: 'In review' })).toBeVisible();
+    clearInterval(sampler);
   } catch (e) {
     // Make CI failures self-explanatory (the trace artifact isn't always reachable).
     const visible = (sel: string) => page.locator(sel).allInnerTexts().catch(() => []);
-    throw new Error(`${(e as Error).message}\n--- diagnostics ---\nurl: ${page.url()}\ntoasts: ${JSON.stringify(await visible('.toasts'))}\nbadges: ${JSON.stringify(await visible('.badge'))}\nnotices: ${JSON.stringify(await visible('.notice'))}\n${diag.join('\n')}`);
+    clearInterval(sampler);
+    throw new Error(`${(e as Error).message}\n--- diagnostics ---\nurl: ${page.url()}\ntoasts seen: ${JSON.stringify([...seenToasts])}\nbadges: ${JSON.stringify(await visible('.badge'))}\nnotices: ${JSON.stringify(await visible('.notice'))}\n${diag.join('\n')}`);
   }
 
   // Writers can't reach the admin panel

@@ -55,8 +55,9 @@ a.announce-in:hover { text-decoration: underline; }
 .nav-link.active { color: var(--navy); border-bottom-color: var(--navy); }
 .nav-caret { background: none; border: 0; padding: 6px 4px 6px 0; margin-left: -8px; color: var(--muted); display: inline-flex; border-radius: 6px; }
 .nav-caret:hover { color: var(--navy); }
-.dropdown { position: absolute; top: calc(100% - 2px); left: 0; min-width: 220px; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--shadow-lift); padding: 8px; opacity: 0; visibility: hidden; transform: translateY(6px); transition: all 0.18s var(--ease); z-index: 60; }
+.dropdown { position: absolute; top: calc(100% + 3px); left: 0; min-width: 220px; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--shadow-lift); padding: 8px; opacity: 0; visibility: hidden; transform: translateY(6px); transition: all 0.18s var(--ease); z-index: 60; }
 .nav-item:hover > .dropdown, .nav-item:focus-within > .dropdown, .nav-item.open > .dropdown { opacity: 1; visibility: visible; transform: none; }
+.dropdown::before { content: ''; position: absolute; left: 0; right: 0; top: -8px; height: 8px; } /* keeps :hover alive across the gap, so the active underline stays visible */
 .dropdown a { display: block; padding: 8px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: 0.88rem; font-weight: 550; }
 .dropdown a:hover { background: var(--info-bg); color: var(--navy); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .nav-link.active, :root:not([data-theme='light']) .nav-link:hover { color: var(--gold); } }
@@ -69,6 +70,7 @@ a.announce-in:hover { text-decoration: underline; }
   .nav-link { flex: 1; border: 0; margin: 0; padding: 12px 4px; }
   .nav-caret { margin: 0; padding: 12px; }
   .dropdown { position: static; width: 100%; opacity: 1; visibility: visible; transform: none; box-shadow: none; border: 0; padding: 0 0 8px 12px; display: none; background: none; }
+  .dropdown::before { display: none; }
   .nav-item.open > .dropdown { display: block; }
   .nav-item:hover > .dropdown { display: none; }
   .nav-item.open:hover > .dropdown { display: block; }

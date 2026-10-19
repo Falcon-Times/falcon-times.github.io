@@ -6,6 +6,7 @@ import { toast, toastError } from '@/ui/Toast';
 import { updateMyName, updateStaffBio } from '../api';
 import { ChangePassword, MfaEnroll, useMe } from '../auth';
 import { ImageField, TextArea, TextField } from '../fields';
+import { DEFAULT_LABEL, getLabels, setLabel } from '../mfaLabels';
 import { useRefs } from '../refs';
 
 export function Profile() {
@@ -54,7 +55,16 @@ export function Security() {
   const me = useMe();
   const [factors, setFactors] = useState<{ id: string; friendly_name?: string | null; status: string }[] | null>(null);
   const [enrolling, setEnrolling] = useState(false);
-  const load = () => sessionClient().auth.mfa.listFactors().then(({ data }) => setFactors((data?.totp ?? []) as never)).catch(toastError);
+  const [labels, setLabels] = useState<Record<string, string>>({});
+  const [renaming, setRenaming] = useState<{ id: string; text: string } | null>(null);
+  const load = () => {
+    sessionClient().auth.mfa.listFactors().then(({ data }) => setFactors((data?.totp ?? []) as never)).catch(toastError);
+    getLabels().then(setLabels).catch(() => undefined);
+  };
+  async function saveName() {
+    if (!renaming) return;
+    try { await setLabel(renaming.id, renaming.text); setRenaming(null); load(); toast('Renamed', 'ok'); } catch (e) { toastError(e); }
+  }
   useEffect(() => { load(); }, []);
 
   async function remove(id: string) {
@@ -81,8 +91,22 @@ export function Security() {
           <ul class="stack" style={{ '--stack': '8px' }}>
             {factors.map((f) => (
               <li key={f.id} class="spread card-row">
-                <span class="row"><Icon name="shield-check" /> {f.friendly_name || 'Authenticator app'} <span class={`badge ${f.status === 'verified' ? 'badge-ok' : 'badge-warn'}`}>{f.status}</span></span>
-                <button class="btn btn-sm btn-danger" onClick={() => remove(f.id)}>Remove</button>
+                {renaming?.id === f.id ? (
+                  <form class="row grow" style={{ '--gap': '8px', 'flex-wrap': 'nowrap' }} onSubmit={(e) => { e.preventDefault(); saveName(); }}>
+                    <input class="input" autoFocus maxLength={40} value={renaming.text} aria-label="Device name"
+                      onInput={(e) => setRenaming({ id: f.id, text: (e.target as HTMLInputElement).value })} />
+                    <button class="btn btn-sm btn-primary">Save</button>
+                    <button type="button" class="btn btn-sm btn-ghost" onClick={() => setRenaming(null)}>Cancel</button>
+                  </form>
+                ) : (
+                  <>
+                    <span class="row"><Icon name="shield-check" /> {labels[f.id] || DEFAULT_LABEL} <span class={`badge ${f.status === 'verified' ? 'badge-ok' : 'badge-warn'}`}>{f.status}</span></span>
+                    <span class="row" style={{ '--gap': '6px' }}>
+                      <button class="btn btn-sm" onClick={() => setRenaming({ id: f.id, text: labels[f.id] || DEFAULT_LABEL })}><Icon name="pencil" size={13} /> Rename</button>
+                      <button class="btn btn-sm btn-danger" onClick={() => remove(f.id)}>Remove</button>
+                    </span>
+                  </>
+                )}
               </li>
             ))}
           </ul>

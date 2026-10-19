@@ -8,6 +8,7 @@ import type { Profile } from '@/lib/types';
 import { Icon } from '@/ui/Icon';
 import { Logo } from '@/ui/Logo';
 import { Loading } from '@/ui/States';
+import { DEFAULT_LABEL, setLabel } from './mfaLabels';
 import { toastError } from '@/ui/Toast';
 
 export interface Me {
@@ -185,6 +186,7 @@ function MfaVerify({ factorId, onDone, onCancel }: { factorId: string; onDone: (
 export function MfaEnroll({ forced = false, onDone, onCancel }: { forced?: boolean; onDone: () => void | Promise<void>; onCancel?: () => void }) {
   const [info, setInfo] = useState<{ id: string; qr: string; secret: string } | null>(null);
   const [code, setCode] = useState('');
+  const [name, setName] = useState(DEFAULT_LABEL);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -194,7 +196,7 @@ export function MfaEnroll({ forced = false, onDone, onCancel }: { forced?: boole
       // Clear half-finished enrolments so re-tries don't collide.
       const { data: factors } = await db.auth.mfa.listFactors();
       for (const f of factors?.all ?? []) if (f.status === 'unverified') await db.auth.mfa.unenroll({ factorId: f.id });
-      const { data, error: err } = await db.auth.mfa.enroll({ factorType: 'totp', friendlyName: `Authenticator ${Math.random().toString(36).slice(2, 6)}` });
+      const { data, error: err } = await db.auth.mfa.enroll({ factorType: 'totp', friendlyName: `device-${Math.random().toString(36).slice(2, 8)}` });
       if (err || !data) { setError(err?.message ?? 'Could not start two-factor setup.'); return; }
       setInfo({ id: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
     })();
@@ -206,6 +208,7 @@ export function MfaEnroll({ forced = false, onDone, onCancel }: { forced?: boole
     setBusy(true); setError('');
     const { error: err } = await sessionClient().auth.mfa.challengeAndVerify({ factorId: info.id, code });
     if (err) { setBusy(false); setError('That code didn’t match. Make sure your phone’s clock is automatic and try the newest code.'); return; }
+    await setLabel(info.id, name).catch(() => undefined); // cosmetic; never block sign-in on it
     await onDone();
     setBusy(false);
   }
@@ -221,6 +224,9 @@ export function MfaEnroll({ forced = false, onDone, onCancel }: { forced?: boole
         <>
           <div class="qr"><img src={info.qr} alt="QR code for your authenticator app" width={180} height={180} /></div>
           <details class="small"><summary>Can’t scan? Enter this key manually</summary><code class="secret">{info.secret}</code></details>
+          <label class="field"><span class="label">Name this device <span class="muted">(optional)</span></span>
+            <input class="input" value={name} maxLength={40} placeholder={DEFAULT_LABEL} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+            <span class="hint">So you can tell them apart later, e.g. “Bitwarden” or “Phone”.</span></label>
           <label class="field"><span class="label">6-digit code</span><CodeInput value={code} onChange={setCode} /></label>
         </>
       ) : !error && <Loading label="Preparing…" />}

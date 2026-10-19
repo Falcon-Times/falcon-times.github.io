@@ -53,9 +53,23 @@ test('admin must set up two-factor, then reaches the dashboard', async () => {
   await admin.getByLabel('6-digit code').fill('000000');
   await admin.getByRole('button', { name: 'Turn on two-factor' }).click();
   await expect(admin.getByText('didn’t match')).toBeVisible();
+  await admin.getByLabel(/Name this device/).fill('Bitwarden');
   await admin.getByLabel('6-digit code').fill(TOTP);
   await admin.getByRole('button', { name: 'Turn on two-factor' }).click();
   await expect(admin.getByRole('heading', { name: /Good (morning|afternoon|evening), Test/ })).toBeVisible();
+});
+
+test('the authenticator shows the name chosen at setup and can be renamed', async () => {
+  await admin.goto('/admin/#/security');
+  const row = admin.locator('.card-row', { hasText: 'verified' });
+  await expect(row).toContainText('Bitwarden');
+  await expect(row).not.toContainText(/device-/); // never expose the internal unique name
+  await row.getByRole('button', { name: 'Rename' }).click();
+  await admin.getByLabel('Device name').fill('Work phone');
+  await admin.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(row).toContainText('Work phone');
+  await admin.reload();
+  await expect(admin.locator('.card-row', { hasText: 'verified' })).toContainText('Work phone');
 });
 
 test('admin creates a writer and a section leader', async ({ browser }) => {
@@ -186,7 +200,10 @@ test('section leader reviews, publishes and later updates the story', async ({ b
 
 test('admin sees the audit trail and can change a site setting', async () => {
   await admin.goto('/admin/#/activity');
-  await expect(admin.getByText(`created writer account ${WRITER.email}`)).toBeVisible();
+  const row = admin.getByRole('row', { name: new RegExp(`created writer account ${WRITER.email}`) });
+  await expect(row).toBeVisible();
+  // "Who" is the person's name, with the email only as a tooltip
+  await expect(row.getByRole('cell').nth(1)).toHaveText('Test Admin');
   await admin.goto('/admin/#/settings');
   await admin.getByLabel('Tagline').fill('Straight from the nest');
   await admin.getByRole('button', { name: 'Save' }).first().click();

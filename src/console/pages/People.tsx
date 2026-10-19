@@ -1,0 +1,195 @@
+import { useEffect, useMemo, useState } from 'preact/hooks';
+import { timeAgo } from '@/lib/format';
+import { sessionClient } from '@/lib/supabase';
+import type { Profile, Role } from '@/lib/types';
+import { Icon } from '@/ui/Icon';
+import { Modal } from '@/ui/Modal';
+import { Empty, ErrorNote, Loading } from '@/ui/States';
+import { toast, toastError } from '@/ui/Toast';
+import { adminUsers, listProfiles, type AdminUserInfo } from '../api';
+import { useMe } from '../auth';
+import { Checkbox, SectionPicker, SelectField, TextField } from '../fields';
+import { useRefs } from '../refs';
+
+const ROLE_LABEL: Record<Role, string> = { writer: 'Writer', editor: 'Section leader', admin: 'Admin' };
+const ROLE_BADGE: Record<Role, string> = { writer: '', editor: 'badge-navy', admin: 'badge-gold' };
+
+/** Random passphrase-ish temporary password (24 chars, no look-alikes). */
+function tempPassword(): string {
+  const alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(20));
+  const chars = [...bytes].map((b) => alphabet[b % alphabet.length]);
+  return `${chars.slice(0, 5).join('')}-${chars.slice(5, 10).join('')}-${chars.slice(10, 15).join('')}-${chars.slice(15, 20).join('')}`;
+}
+
+export function People() {
+  const me = useMe();
+  const { sectionName, reload } = useRefs();
+  const [rows, setRows] = useState<Profile[] | null>(null);
+  const [info, setInfo] = useState<Record<string, AdminUserInfo>>({});
+  const [error, setError] = useState<unknown>(null);
+  const [editing, setEditing] = useState<Profile | 'new' | null>(null);
+  const [credential, setCredential] = useState<{ email: string; password: string } | null>(null);
+  const [tick, setTick] = useState(0);
+  const refresh = () => { setTick((t) => t + 1); reload(); };
+
+  useEffect(() => {
+    listProfiles().then(setRows).catch(setError);
+    adminUsers<{ users: AdminUserInfo[] }>({ action: 'list' })
+      .then((r) => setInfo(Object.fromEntries(r.users.map((u) => [u.id, u]))))
+      .catch(() => undefined); // function not deployed yet → just hide the extra columns
+  }, [tick]);
+
+  const admins = useMemo(() => (rows ?? []).filter((r) => r.role === 'admin' && r.active).length, [rows]);
+
+  return (
+    <div class="stack" style={{ '--stack': '18px' }}>
+      <div class="spread">
+        <div>
+          <h1 class="page-title">People &amp; access</h1>
+          <p class="muted">Everyone who can sign in to the newsroom. Each person gets their own account — never share a login.</p>
+        </div>
+        <button class="btn btn-primary" onClick={() => setEditing('new')}><Icon name="plus" size={16} /> Add account</button>
+      </div>
+      <div class="notice"><Icon name="info" /><div>
+        <strong>Roles.</strong> <em>Writers</em> draft and submit stories in their sections. <em>Section leaders</em> also review and publish stories, triage the tip line, and run polls and the scoreboard for their sections. <em>Admins</em> manage everything and must use two-factor sign-in.
+      </div></div>
+      {error ? <ErrorNote error={error} /> : !rows ? <Loading /> : rows.length === 0 ? <Empty icon="users" title="No accounts yet" /> : (
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Person</th><th>Role</th><th>Sections</th><th>2FA</th><th>Last sign-in</th><th class="col-actions"><span class="sr-only">Actions</span></th></tr></thead>
+            <tbody>
+              {rows.map((p) => {
+                const i = info[p.id];
+                return (
+                  <tr key={p.id} class={p.active ? '' : 'inactive'}>
+                    <td><strong>{p.display_name || '—'}</strong>{p.id === me.userId && <span class="badge" style={{ marginLeft: '6px' }}>You</span>}<div class="small muted">{p.email}</div></td>
+                    <td><span class={`badge ${ROLE_BADGE[p.role]}`}>{ROLE_LABEL[p.role]}</span>{!p.active && <span class="badge badge-bad" style={{ marginLeft: '6px' }}>Disabled</span>}</td>
+                    <td class="small">{p.role === 'admin' ? <span class="muted">All</span> : p.sections.map(sectionName).join(', ') || <span class="muted">None assigned</span>}</td>
+                    <td>{i ? <span class={`badge ${i.mfa ? 'badge-ok' : ''}`}>{i.mfa ? 'On' : 'Off'}</span> : '—'}</td>
+                    <td class="small nowrap">{i?.last_sign_in_at ? timeAgo(i.last_sign_in_at) : <span class="muted">Never</span>}</td>
+                    <td class="col-actions"><button class="btn btn-sm" onClick={() => setEditing(p)}><Icon name="pencil" size={13} /> Manage</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {editing === 'new' && <CreateModal onClose={() => setEditing(null)} onCreated={(c) => { setEditing(null); setCredential(c); refresh(); }} />}
+      {editing && editing !== 'new' && (
+        <EditModal person={editing} isSelf={editing.id === me.userId} lastAdmin={editing.role === 'admin' && editing.active && admins <= 1}
+          onClose={() => setEditing(null)} onSaved={() => { setEditing(null); refresh(); }} onCredential={setCredential} />
+      )}
+      {credential && <CredentialModal {...credential} onClose={() => setCredential(null)} />}
+    </div>
+  );
+}
+
+function CredentialModal({ email, password, onClose }: { email: string; password: string; onClose: () => void }) {
+  return (
+    <Modal title="Temporary password" onClose={onClose} footer={<button class="btn btn-primary" onClick={onClose}>I’ve shared it</button>}>
+      <div class="stack" style={{ '--stack': '12px' }}>
+        <div class="notice notice-warn"><Icon name="warning" /><div>This is the only time the password is shown. Share it with <strong>{email}</strong> in person or over a private message — not in a group chat. They’ll be asked to choose their own at first sign-in.</div></div>
+        <div class="secret-box"><code>{password}</code><button class="btn btn-sm" onClick={() => { navigator.clipboard.writeText(password); toast('Copied', 'ok'); }}><Icon name="copy" size={14} /> Copy</button></div>
+        <p class="small muted">Sign-in address: <code>{location.origin}/newsroom/</code></p>
+      </div>
+    </Modal>
+  );
+}
+
+function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (c: { email: string; password: string }) => void }) {
+  const { sections, staff } = useRefs();
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [role, setRole] = useState<Role>('writer');
+  const [secs, setSecs] = useState<string[]>([]);
+  const [staffId, setStaffId] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: Event) {
+    e.preventDefault();
+    const password = tempPassword();
+    setBusy(true);
+    try {
+      await adminUsers({ action: 'create', email: email.trim(), password, display_name: name.trim(), role, sections: secs, staff_member_id: staffId || null });
+      toast('Account created', 'ok');
+      onCreated({ email: email.trim(), password });
+    } catch (err) { toastError(err); setBusy(false); }
+  }
+  return (
+    <Modal title="Add an account" onClose={onClose} width={640}
+      footer={<><button class="btn" onClick={onClose}>Cancel</button><button form="create-user" class="btn btn-primary" disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button></>}>
+      <form id="create-user" class="form-grid" onSubmit={submit}>
+        <TextField label="Email" type="email" required value={email} onChange={setEmail} hint="Use the address they’ll actually check." />
+        <TextField label="Display name" required value={name} onChange={setName} max={120} />
+        <SelectField label="Role" value={role} onChange={(v) => setRole(v as Role)} options={(Object.keys(ROLE_LABEL) as Role[]).map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
+        <SelectField label="Linked staff profile" value={staffId} onChange={setStaffId} hint="Lets them edit their own public bio."
+          options={[{ value: '', label: '— none —' }, ...staff.map((s) => ({ value: s.id, label: s.name }))]} />
+        {role !== 'admin' && <SectionPicker class="full" label="Sections they can write for" value={secs} onChange={setSecs} sections={sections.filter((s) => s.active)} hint="Writers can only draft stories in these sections. Section leaders can also publish in them." />}
+        <p class="small muted full">A one-time temporary password is generated for you to hand over. {role === 'admin' ? 'Admins will be asked to set up an authenticator app at first sign-in.' : ''}</p>
+      </form>
+    </Modal>
+  );
+}
+
+function EditModal({ person, isSelf, lastAdmin, onClose, onSaved, onCredential }: {
+  person: Profile; isSelf: boolean; lastAdmin: boolean; onClose: () => void; onSaved: () => void;
+  onCredential: (c: { email: string; password: string }) => void;
+}) {
+  const { sections, staff } = useRefs();
+  const [name, setName] = useState(person.display_name);
+  const [role, setRole] = useState<Role>(person.role);
+  const [secs, setSecs] = useState<string[]>(person.sections);
+  const [staffId, setStaffId] = useState(person.staff_member_id ?? '');
+  const [active, setActive] = useState(person.active);
+  const [busy, setBusy] = useState(false);
+
+  async function run<T>(fn: () => Promise<T>, ok: string, done = true) {
+    setBusy(true);
+    try { await fn(); toast(ok, 'ok'); if (done) onSaved(); } catch (e) { toastError(e); } finally { setBusy(false); }
+  }
+  const save = (e: Event) => { e.preventDefault(); return run(async () => {
+    const res = await sessionClient().from('profiles').update({ display_name: name.trim(), role, sections: role === 'admin' ? [] : secs, staff_member_id: staffId || null }).eq('id', person.id).select('id');
+    if (res.error) throw new Error(res.error.message);
+    if (!res.data?.length) throw new Error('Nothing was saved.');
+    if (active !== person.active) await adminUsers({ action: 'set_active', user_id: person.id, active });
+  }, 'Saved'); };
+  const resetPw = () => {
+    if (!confirm(`Set a new temporary password for ${person.email}? Their current password stops working immediately.`)) return;
+    const password = tempPassword();
+    return run(async () => { await adminUsers({ action: 'reset_password', user_id: person.id, password }); onCredential({ email: person.email, password }); }, 'Password reset');
+  };
+  const resetMfa = () => confirm(`Remove ${person.email}’s two-factor device? They’ll set up a new one at next sign-in.`) &&
+    run(() => adminUsers({ action: 'reset_mfa', user_id: person.id }), 'Two-factor reset');
+  const remove = () => confirm(`Permanently delete ${person.email}? Their stories stay on the site but lose the account link. Consider disabling instead.`) &&
+    run(() => adminUsers({ action: 'delete', user_id: person.id }), 'Account deleted');
+
+  return (
+    <Modal title={`Manage ${person.display_name || person.email}`} onClose={onClose} width={680}
+      footer={<><button class="btn" onClick={onClose}>Cancel</button><button form="edit-user" class="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button></>}>
+      <form id="edit-user" class="form-grid" onSubmit={save}>
+        <TextField label="Display name" required value={name} onChange={setName} max={120} />
+        <TextField label="Email" value={person.email} onChange={() => undefined} disabled hint="To change an email, create a new account." />
+        <SelectField label="Role" value={role} onChange={(v) => setRole(v as Role)} disabled={lastAdmin || isSelf}
+          hint={isSelf ? 'You can’t change your own role.' : lastAdmin ? 'This is the only active admin.' : undefined}
+          options={(Object.keys(ROLE_LABEL) as Role[]).map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
+        <SelectField label="Linked staff profile" value={staffId} onChange={setStaffId}
+          options={[{ value: '', label: '— none —' }, ...staff.map((s) => ({ value: s.id, label: s.name }))]} />
+        {role !== 'admin' && <SectionPicker class="full" label="Sections" value={secs} onChange={setSecs} sections={sections.filter((s) => s.active)} />}
+        <div class="full"><Checkbox label="Account enabled" checked={active} onChange={setActive} hint={isSelf || lastAdmin ? 'You can’t disable your own account or the last admin.' : 'Disabled accounts can’t sign in. Their stories remain.'} /></div>
+        {(isSelf || lastAdmin) && !active && <p class="notice notice-bad full">This account can’t be disabled.</p>}
+      </form>
+      <hr class="rule" />
+      <div class="stack" style={{ '--stack': '10px' }}>
+        <h3 class="h3">Account actions</h3>
+        <div class="row">
+          <button class="btn" disabled={busy || isSelf} onClick={resetPw}><Icon name="key" size={15} /> New temporary password</button>
+          <button class="btn" disabled={busy || isSelf} onClick={resetMfa}><Icon name="shield" size={15} /> Reset two-factor</button>
+          <button class="btn btn-danger" disabled={busy || isSelf || lastAdmin} onClick={remove}><Icon name="trash" size={15} /> Delete account</button>
+        </div>
+        {isSelf && <p class="small muted">Manage your own password and two-factor under “Account security”.</p>}
+      </div>
+    </Modal>
+  );
+}

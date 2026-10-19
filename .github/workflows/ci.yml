@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Types, unit tests & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run seed:check
+      - run: npm run build   # no backend secrets: proves the fallback build works
+
+  database:
+    name: Database & row-level security
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/test-db.sh
+
+  e2e:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      POSTGREST_BIN: ${{ github.workspace }}/.tools/postgrest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Install PostgREST
+        run: |
+          mkdir -p .tools
+          curl -sSL https://github.com/PostgREST/postgrest/releases/download/v12.2.3/postgrest-v12.2.3-linux-static-x64.tar.xz | tar -xJ -C .tools
+      - name: Start local Supabase stand-in
+        run: |
+          ./tests/harness/run.sh > harness.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:54330/__test/health && break; sleep 1; done
+      - name: Build the site against it and serve the production bundle
+        # A production build (not the dev server) keeps Vite's on-demand
+        # dependency re-optimisation from reloading pages in the middle of a test.
+        run: |
+          export VITE_SUPABASE_URL=http://127.0.0.1:54330
+          export VITE_SUPABASE_ANON_KEY=$(curl -sf http://127.0.0.1:54330/__test/anon-key)
+          npx vite build
+          npx vite preview --port 5173 --host 127.0.0.1 > vite.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:5173/ > /dev/null && break; sleep 1; done
+      - run: npx playwright test
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-debug
+          path: |
+            test-results/
+            harness.log
+            vite.log

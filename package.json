@@ -1,0 +1,28 @@
+{
+  "name": "falcon-times",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "description": "The Falcon Times — Avon High School student newspaper",
+  "scripts": {
+    "dev": "vite",
+    "dev:demo": "vite --mode demo",
+    "build": "tsc --noEmit && vite build",
+    "build:demo": "vite build --mode demo",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
+    "dompurify": "^3.4.17",
+    "marked": "^18.1.1",
+    "preact": "^10.29.8"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^6.4.4",
+    "vitest": "^5.0.5"
+  }
+}

@@ -32,7 +32,7 @@ jobs:
           for v in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_REF; do
             if [ -z "${!v}" ]; then echo "::error::Missing repository secret $v (see docs/SETUP.md)"; exit 1; fi
           done
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: latest
       - run: supabase link --project-ref "$SUPABASE_PROJECT_REF"

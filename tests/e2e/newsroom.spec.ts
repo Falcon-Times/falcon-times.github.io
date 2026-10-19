@@ -109,8 +109,8 @@ test('writer: forced password change, drafts and submits a story', async ({ brow
   await expect(page.locator('.preview script')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Publish/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Submit for review' }).click();
-  await expect(page.getByText('Submitted to your section leader').first()).toBeVisible();
-  await expect(page.locator('.badge', { hasText: 'In review' }).first()).toBeVisible();
+  // Assert on the durable state (the status badge), not the short-lived toast.
+  await expect(page.locator('.editor-top .badge', { hasText: 'In review' })).toBeVisible();
 
   // Writers can't reach the admin panel
   await page.goto('/admin/');

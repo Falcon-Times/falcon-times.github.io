@@ -103,3 +103,33 @@ test.describe('daily spark ticker', () => {
     await expect(page.locator('.ticker-text')).not.toHaveClass(/scroll/);
   });
 });
+
+test.describe('navigation readability', () => {
+  const luminance = (rgb: string) => {
+    const [r, g, b] = rgb.match(/[\d.]+/g)!.slice(0, 3).map(Number).map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => { const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+
+  for (const mode of ['light', 'dark (system)', 'dark (switched on)'] as const) {
+    test(`a hovered sub-section is easy to read — ${mode}`, async ({ browser }) => {
+      const ctx = await browser.newContext({ colorScheme: mode === 'dark (system)' ? 'dark' : 'light' });
+      const page = await ctx.newPage();
+      if (mode === 'dark (switched on)') await page.addInitScript(() => localStorage.setItem('falcon-theme', '"dark"'));
+      await page.goto('/');
+      const nav = page.getByRole('navigation', { name: 'Sections' });
+      await nav.getByRole('link', { name: 'Sports' }).hover();
+      const item = nav.getByRole('link', { name: 'Athlete Spotlights' });
+      await item.hover();
+      await page.waitForTimeout(300);
+      const { fg, bg } = await item.evaluate((el) => ({ fg: getComputedStyle(el).color, bg: getComputedStyle(el).backgroundColor }));
+      expect(contrast(fg, bg), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+      // the top-level link stays readable and underlined while its menu is open
+      const link = nav.getByRole('link', { name: 'Sports' });
+      const linkStyle = await link.evaluate((el) => ({ color: getComputedStyle(el).color, border: getComputedStyle(el).borderBottomColor }));
+      const surface = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+      expect(contrast(linkStyle.color, surface), 'nav link text').toBeGreaterThanOrEqual(4.5);
+      await ctx.close();
+    });
+  }
+});

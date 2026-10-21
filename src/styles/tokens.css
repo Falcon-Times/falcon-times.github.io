@@ -26,6 +26,8 @@
   --rule: #ddd6c6;
   --rule-strong: #c4bba5;
   --link: #14509e;
+  /* Navy on light backgrounds, gold on dark: for text/icons that signal "active" or "hover". */
+  --accent-ink: var(--navy);
   --focus: #1a73e8;
 
   /* Status */
@@ -66,6 +68,7 @@
     --rule: #2a3b58;
     --rule-strong: #3b5073;
     --link: #8fb8ff;
+    --accent-ink: var(--gold);
     --gold-soft: #3a2f10;
     --gold-ink: #ffd477;
     --ok: #55d391;
@@ -90,6 +93,7 @@
   --rule: #2a3b58;
   --rule-strong: #3b5073;
   --link: #8fb8ff;
+  --accent-ink: var(--gold);
   --gold-soft: #3a2f10;
   --gold-ink: #ffd477;
   --ok: #55d391;

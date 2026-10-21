@@ -54,20 +54,19 @@ a.announce-in:hover { text-decoration: underline; }
 /* Navigation */
 .nav { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--rule); box-shadow: 0 2px 10px rgb(0 40 85 / 5%); }
 .nav-in { display: flex; align-items: center; min-height: 50px; }
-.nav-burger { display: none; align-items: center; gap: 8px; background: none; border: 0; font-weight: 700; padding: 10px 4px; color: var(--navy); }
+.nav-burger { display: none; align-items: center; gap: 8px; background: none; border: 0; font-weight: 700; padding: 10px 4px; color: var(--accent-ink); }
 .nav-list { display: flex; align-items: stretch; gap: 2px; flex-wrap: wrap; justify-content: center; width: 100%; }
 .nav-item { position: relative; display: flex; align-items: center; }
 .nav-link { display: inline-flex; align-items: center; gap: 6px; padding: 14px 12px; font-weight: 650; font-size: 0.9rem; color: var(--ink); text-decoration: none; border-bottom: 3px solid transparent; margin-bottom: -1px; }
-.nav-link:hover { color: var(--navy-600); text-decoration: none; border-bottom-color: var(--gold); }
-.nav-link.active { color: var(--navy); border-bottom-color: var(--navy); }
+.nav-link:hover { color: var(--accent-ink); text-decoration: none; border-bottom-color: var(--gold); }
+.nav-link.active { color: var(--accent-ink); border-bottom-color: var(--accent-ink); }
 .nav-caret { background: none; border: 0; padding: 6px 4px 6px 0; margin-left: -8px; color: var(--muted); display: inline-flex; border-radius: 6px; }
-.nav-caret:hover { color: var(--navy); }
+.nav-caret:hover { color: var(--accent-ink); }
 .dropdown { position: absolute; top: calc(100% + 3px); left: 0; min-width: 220px; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--shadow-lift); padding: 8px; opacity: 0; visibility: hidden; transform: translateY(6px); transition: all 0.18s var(--ease); z-index: 60; }
 .nav-item:hover > .dropdown, .nav-item:focus-within > .dropdown, .nav-item.open > .dropdown { opacity: 1; visibility: visible; transform: none; }
 .dropdown::before { content: ''; position: absolute; left: 0; right: 0; top: -8px; height: 8px; } /* keeps :hover alive across the gap, so the active underline stays visible */
 .dropdown a { display: block; padding: 8px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: 0.88rem; font-weight: 550; }
-.dropdown a:hover { background: var(--info-bg); color: var(--navy); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .nav-link.active, :root:not([data-theme='light']) .nav-link:hover { color: var(--gold); } }
+.dropdown a:hover { background: var(--info-bg); color: var(--accent-ink); }
 @media (max-width: 899px) {
   .nav-burger { display: inline-flex; }
   .nav-in { flex-wrap: wrap; }

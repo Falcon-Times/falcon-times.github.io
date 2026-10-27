@@ -216,8 +216,7 @@ function EditModal({ person, isSelf, lastAdmin, bypass, onClose, onSaved, onCred
         <SelectField label="Linked staff profile" value={staffId} onChange={setStaffId}
           options={[{ value: '', label: '— none —' }, ...staff.map((s) => ({ value: s.id, label: s.name }))]} />
         {role !== 'admin' && <SectionPicker class="full" label="Sections" value={secs} onChange={setSecs} sections={sections.filter((s) => s.active)} />}
-        <div class="full"><Checkbox label="Account enabled" checked={active} onChange={setActive} hint={isSelf || lastAdmin ? 'You can’t disable your own account or the last admin.' : 'Disabled accounts can’t sign in. Their stories remain.'} /></div>
-        {(isSelf || lastAdmin) && !active && <p class="notice notice-bad full">This account can’t be disabled.</p>}
+        <div class="full"><Checkbox label="Account enabled" checked={active} onChange={setActive} disabled={isSelf || lastAdmin} hint={isSelf || lastAdmin ? 'You can’t disable your own account or the last admin.' : 'Disabled accounts can’t sign in. Their stories remain.'} /></div>
       </form>
       <hr class="rule" />
       <div class="stack" style={{ '--stack': '10px' }}>

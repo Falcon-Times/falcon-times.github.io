@@ -61,10 +61,10 @@ export function SelectField({ label, value, onChange, options, hint, class: cls,
   );
 }
 
-export function Checkbox({ label, checked, onChange, hint }: { label: string; checked: boolean; onChange: Change<boolean>; hint?: string }) {
+export function Checkbox({ label, checked, onChange, hint, disabled }: { label: string; checked: boolean; onChange: Change<boolean>; hint?: string; disabled?: boolean }) {
   return (
     <div>
-      <label class="check"><input type="checkbox" checked={checked} onChange={(e) => onChange((e.target as HTMLInputElement).checked)} /> {label}</label>
+      <label class="check"><input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange((e.target as HTMLInputElement).checked)} /> {label}</label>
       {hint && <div class="hint small muted" style={{ marginLeft: '26px' }}>{hint}</div>}
     </div>
   );

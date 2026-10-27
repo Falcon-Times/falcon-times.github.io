@@ -167,9 +167,21 @@ const server = http.createServer(async (req, res) => {
       const type = req.headers['content-type'] ?? 'application/octet-stream';
       let data = raw; let ctype = type;
       if (type.startsWith('multipart/form-data')) {
-        const m = raw.toString('latin1').match(/\r\n\r\n([\s\S]*)\r\n--[^\r\n]+--\r\s*$/);
-        const fileType = raw.toString('latin1').match(/Content-Type: ([^\r\n]+)/i)?.[1] ?? 'application/octet-stream';
-        data = m ? Buffer.from(m[1], 'latin1') : raw; ctype = fileType;
+        // supabase-js sends several parts (cacheControl, then the file); keep only the file's bytes.
+        const boundary = Buffer.from('--' + type.match(/boundary=([^;]+)/)[1]);
+        let at = 0; let file = null;
+        for (;;) {
+          const start = raw.indexOf(boundary, at);
+          if (start < 0) break;
+          const next = raw.indexOf(boundary, start + boundary.length);
+          if (next < 0) break;
+          const part = raw.subarray(start + boundary.length + 2, next - 2); // drop the CRLF after/before the markers
+          const split = part.indexOf('\r\n\r\n');
+          const head = part.subarray(0, split).toString('latin1');
+          if (/filename=/i.test(head)) { file = { data: part.subarray(split + 4), type: head.match(/Content-Type: ([^\r\n]+)/i)?.[1] ?? 'application/octet-stream' }; break; }
+          at = next;
+        }
+        if (file) { data = file.data; ctype = file.type; }
       }
       const key = path.replace('/storage/v1/object/', '');
       objects.set(key, { data, type: ctype });

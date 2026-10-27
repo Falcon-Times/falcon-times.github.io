@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { TOTP, seedAdmin, signIn } from './helpers';
+import { TOTP, db, seedAdmin, signIn } from './helpers';
 
 // One scripted "week in the newsroom". Tests share state, so they run in order.
 test.describe.configure({ mode: 'serial' });
@@ -134,6 +134,21 @@ test('writer: forced password change, drafts and submits a story', async ({ brow
   await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Wendy/ })).toBeVisible();
 
   // Writers have no leader tools
+  // My profile: the public byline name comes from the linked staff profile.
+  await page.goto('/newsroom/#/profile');
+  const byline = page.getByLabel('Public byline name');
+  await expect(byline).toBeDisabled();
+  await expect(byline).toHaveValue('');
+  await expect(page.getByText('isn’t linked to a staff profile yet, so no byline name')).toBeVisible();
+  const c = db(); await c.connect();
+  const { rows: [member] } = await c.query('select id, name from public.staff_members order by sort_order limit 1');
+  await c.query('update public.profiles set staff_member_id = $1 where email = $2', [member.id, WRITER.email]);
+  await c.end();
+  await page.reload();
+  await expect(page.getByLabel('Public byline name')).toHaveValue(member.name);
+  await expect(page.getByText('This is the name readers see')).toBeVisible();
+  await page.goto('/newsroom/');
+
   await expect(page.getByRole('link', { name: 'Tip line' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Scoreboard' })).toHaveCount(0);
 

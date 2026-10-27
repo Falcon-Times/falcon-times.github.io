@@ -33,7 +33,10 @@ export function Profile() {
     <div class="stack" style={{ '--stack': '18px', maxWidth: '720px' }}>
       <h1 class="page-title">My profile</h1>
       <form class="card-box stack" style={{ '--stack': '16px' }} onSubmit={save}>
-        <TextField label="Display name" value={name} onChange={setName} required max={120} hint="Shown in the newsroom. Your public byline name is set by an admin." />
+        <TextField label="Display name" value={name} onChange={setName} required max={120} hint="Shown inside the newsroom (assignments, notes, the activity log). It isn’t what readers see." />
+        <TextField label="Public byline name" value={person?.name ?? ''} onChange={() => undefined} disabled
+          placeholder="Not set yet"
+          hint={person ? 'This is the name readers see on your stories and on “Meet the newsroom”. It’s set by an admin — ask one if it needs fixing.' : 'Your account isn’t linked to a staff profile yet, so no byline name is set. An admin can link it.'} />
         <div class="muted small">Signed in as <strong>{me.profile.email}</strong></div>
         {person ? (
           <>

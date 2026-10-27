@@ -26,6 +26,12 @@
   width: 100%; padding: 10px 12px; border: 1px solid var(--rule-strong); border-radius: var(--radius-sm);
   background: var(--surface); color: var(--ink); font: inherit; font-size: 0.95rem;
 }
+/* Read-only fields look inert: tinted, dashed, no text cursor, and the label says so. */
+.input:disabled, .select:disabled, .textarea:disabled {
+  background: var(--surface-2); color: var(--muted); -webkit-text-fill-color: var(--muted); opacity: 1;
+  border-style: dashed; cursor: not-allowed;
+}
+.field:has(:disabled) > .label::after { content: ' · read-only'; font-weight: 600; letter-spacing: 0.02em; text-transform: none; color: var(--muted); }
 .textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
 .input:focus, .select:focus, .textarea:focus { outline: 3px solid color-mix(in srgb, var(--focus) 35%, transparent); border-color: var(--focus); }
 .check { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; }

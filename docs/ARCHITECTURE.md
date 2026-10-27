@@ -51,7 +51,9 @@ touch *School News*, even by crafting requests by hand — the database refuses.
    It exists only inside the Edge Function's environment (injected by Supabase), never in this repo, GitHub, or
    a browser. The function first calls `is_admin()` with the *caller's* token.
 5. **No self-service sign-up.** Public sign-ups are disabled in Supabase; accounts come only from an admin.
-   Temporary passwords are random, shown once, and must be replaced at first login (≥ 12 characters).
+   Temporary passwords are random, shown once, and must be replaced at first login. Passwords must be ≥ 12
+   characters with lowercase, uppercase and a digit (set in Supabase; `supabase/functions/_shared/passwordPolicy.ts`
+   mirrors it so the screens and the account function can explain it up front).
 6. **Output safety.** Story bodies are Markdown rendered then sanitised with DOMPurify (no scripts, event
    handlers, iframes, forms, `javascript:` links). The only embed is YouTube via `youtube-nocookie.com`.
    All other UI is rendered by Preact, which escapes text by default.

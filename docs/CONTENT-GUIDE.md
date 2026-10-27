@@ -2,7 +2,7 @@
 
 Welcome to the Falcon Times newsroom! Sign in at **<https://falcon-times.github.io/newsroom/>** with the
 email and temporary password your admin gave you. The first time, you'll choose your own password
-(12+ characters — a few random words works great). **Never share your login**; the site records who
+(at least 12 characters with a capital letter, a lowercase letter and a number — a few random words plus a digit works great). **Never share your login**; the site records who
 did what.
 
 > Section leaders: we recommend turning on two-factor under **Account security**.

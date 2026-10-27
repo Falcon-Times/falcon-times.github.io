@@ -3,6 +3,7 @@ import { useCallback, useContext, useEffect, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import type { Session } from '@supabase/supabase-js';
 import { isConfigured } from '@/lib/config';
+import { checkPassword, PASSWORD_RULES_SUMMARY } from '@/lib/passwordPolicy';
 import { sessionClient } from '@/lib/supabase';
 import type { Profile } from '@/lib/types';
 import { Icon } from '@/ui/Icon';
@@ -246,12 +247,12 @@ export function ChangePassword({ forced = false, onDone }: { forced?: boolean; o
   async function submit(e: Event) {
     e.preventDefault();
     setError(''); setOk(false);
-    if (pw.length < 12) return setError('Use at least 12 characters — a few random words make a great passphrase.');
+    if (!strong) return setError(`That password doesn’t meet the rules. ${PASSWORD_RULES_SUMMARY}`);
     if (pw !== pw2) return setError('The two passwords don’t match.');
     setBusy(true);
     const { error: err } = await sessionClient().auth.updateUser({ password: pw, data: { must_change_password: false } });
     setBusy(false);
-    if (err) return setError(err.message);
+    if (err) return setError(weakPasswordMessage(err as never));
     setPw(''); setPw2(''); setOk(true);
     await onDone?.();
   }
@@ -260,13 +261,32 @@ export function ChangePassword({ forced = false, onDone }: { forced?: boolean; o
       <h1 class={forced ? 'auth-h' : 'h3'}>{forced ? 'Choose your own password' : 'Change password'}</h1>
       {forced && <p class="muted">You signed in with a temporary password. Pick a new one that only you know.</p>}
       <label class="field"><span class="label">New password</span>
-        <input class="input" type="password" autocomplete="new-password" minLength={12} required value={pw} onInput={(e) => setPw((e.target as HTMLInputElement).value)} />
-        <span class="hint">At least 12 characters.</span></label>
+        <input class="input" type="password" autocomplete="new-password" required value={pw} aria-describedby="pw-rules" onInput={(e) => setPw((e.target as HTMLInputElement).value)} />
+        <span class="hint">A few random words with a capital and a number make a great passphrase.</span></label>
+      <ul class="checklist" id="pw-rules" aria-label="Password rules">
+        {checks.map((c) => (
+          <li key={c.id} class={c.ok ? 'ok' : ''}>
+            <Icon name={c.ok ? 'circle-check' : 'clock'} size={15} /> {c.label}
+            <span class="sr-only">{c.ok ? ' — met' : ' — not met yet'}</span>
+          </li>
+        ))}
+      </ul>
       <label class="field"><span class="label">Confirm new password</span>
-        <input class="input" type="password" autocomplete="new-password" required value={pw2} onInput={(e) => setPw2((e.target as HTMLInputElement).value)} /></label>
+        <input class="input" type="password" autocomplete="new-password" required value={pw2} onInput={(e) => setPw2((e.target as HTMLInputElement).value)} />
+        {pw2 && pw !== pw2 && <span class="hint">The two passwords don’t match yet.</span>}</label>
       {error && <div class="notice notice-bad" role="alert"><Icon name="warning" />{error}</div>}
       {ok && !forced && <div class="notice notice-ok" role="status"><Icon name="circle-check" />Password updated.</div>}
-      <button class="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save new password'}</button>
+      <button class="btn btn-primary" disabled={busy || !strong || pw !== pw2}>{busy ? 'Saving…' : 'Save new password'}</button>
     </form>
   );
 }
+/** Friendlier wording for Supabase's own weak-password rejection (it knows about breached passwords too). */
+function weakPasswordMessage(err: { code?: string; message: string; reasons?: string[] }): string {
+  if (err.code !== 'weak_password' && !err.reasons) return err.message;
+  const reasons = err.reasons ?? [];
+  if (reasons.includes('pwned')) return 'That password has appeared in a known data breach, so it isn’t safe to use. Choose a different one.';
+  return `That password doesn’t meet the rules. ${PASSWORD_RULES_SUMMARY}`;
+}
+
+  const checks = checkPassword(pw);
+  const strong = checks.every((c) => c.ok);

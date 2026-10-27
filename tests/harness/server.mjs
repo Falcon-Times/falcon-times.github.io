@@ -76,6 +76,20 @@ function claims(req) {
   return c.exp && c.exp < now() ? null : c;
 }
 
+/** Mirrors the dashboard setting: 12+ characters with lowercase, uppercase and a digit. */
+function weakPasswordReasons(pw) {
+  const reasons = [];
+  if (String(pw ?? '').length < 12) reasons.push('length');
+  if (!/[a-z]/.test(pw) || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw)) reasons.push('characters');
+  return reasons;
+}
+const weak = (res, pw) => {
+  const reasons = weakPasswordReasons(pw);
+  if (!reasons.length) return false;
+  send(res, 422, { code: 422, error_code: 'weak_password', msg: 'Password should be at least 12 characters and contain lowercase, uppercase and digits.', weak_password: { reasons } });
+  return true;
+};
+
 export async function createUser({ email, password, meta = {} }) {
   const id = crypto.randomUUID();
   const u = { id, email: email.toLowerCase(), password, meta, factors: [], created_at: new Date().toISOString(), banned: false };
@@ -186,6 +200,7 @@ const server = http.createServer(async (req, res) => {
       const u = users.get(c.sub);
       if (req.method === 'PUT') {
         const b = JSON.parse((await readBody(req)).toString() || '{}');
+        if (b.password && weak(res, b.password)) return;
         if (b.password) u.password = b.password;
         if (b.data) u.meta = { ...u.meta, ...b.data };
         return send(res, 200, publicUser(u));
@@ -227,6 +242,7 @@ const server = http.createServer(async (req, res) => {
       if (!c || c.role !== 'service_role') return err(res, 403, 'not admin');
       if (path === '/auth/v1/admin/users' && req.method === 'POST') {
         const b = JSON.parse((await readBody(req)).toString() || '{}');
+        if (weak(res, b.password)) return;
         if (byEmail(b.email)) return err(res, 422, 'A user with this email address has already been registered', 'email_exists');
         const u = await createUser({ email: b.email, password: b.password, meta: b.user_metadata ?? {} });
         return send(res, 200, publicUser(u));
@@ -241,6 +257,7 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'GET') return send(res, 200, publicUser(u));
         if (req.method === 'PUT') {
           const b = JSON.parse((await readBody(req)).toString() || '{}');
+          if (b.password && weak(res, b.password)) return;
           if (b.password) u.password = b.password;
           if (b.user_metadata) u.meta = b.user_metadata;
           if (b.ban_duration) u.banned = b.ban_duration !== 'none';

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { timeAgo } from '@/lib/format';
+import { isStrongPassword } from '@/lib/passwordPolicy';
 import { sessionClient } from '@/lib/supabase';
 import type { Profile, Role } from '@/lib/types';
 import { Icon } from '@/ui/Icon';
@@ -14,12 +15,15 @@ import { useRefs } from '../refs';
 const ROLE_LABEL: Record<Role, string> = { writer: 'Writer', editor: 'Section leader', admin: 'Admin' };
 const ROLE_BADGE: Record<Role, string> = { writer: '', editor: 'badge-navy', admin: 'badge-gold' };
 
-/** Random passphrase-ish temporary password (24 chars, no look-alikes). */
+/** Random temporary password (23 chars, no look-alikes) that always meets the password rules. */
 function tempPassword(): string {
   const alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const bytes = crypto.getRandomValues(new Uint8Array(20));
-  const chars = [...bytes].map((b) => alphabet[b % alphabet.length]);
-  return `${chars.slice(0, 5).join('')}-${chars.slice(5, 10).join('')}-${chars.slice(10, 15).join('')}-${chars.slice(15, 20).join('')}`;
+  for (;;) {
+    const bytes = crypto.getRandomValues(new Uint8Array(20));
+    const chars = [...bytes].map((b) => alphabet[b % alphabet.length]);
+    const pw = `${chars.slice(0, 5).join('')}-${chars.slice(5, 10).join('')}-${chars.slice(10, 15).join('')}-${chars.slice(15, 20).join('')}`;
+    if (isStrongPassword(pw)) return pw; // a random draw can miss a digit or a capital; just draw again
+  }
 }
 
 export function People() {

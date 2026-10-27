@@ -38,7 +38,11 @@ Under **Authentication** in the Supabase dashboard:
 
 * **Sign In / Providers →** turn **off** *Allow new users to sign up*.
   Accounts are created only by an admin from the admin panel.
-* **Sign In / Providers → Email →** set *Minimum password length* to **12** or more.
+* **Sign In / Providers → Email →** set *Minimum password length* to **12** and *Password requirements*
+  to **Lowercase, uppercase letters and digits**. The sign-in screens already explain and check exactly
+  these rules; if you ever change them in the dashboard, update
+  `supabase/functions/_shared/passwordPolicy.ts` to match (Supabase is the authority, that file just
+  produces the friendly messages).
 * **Multi-Factor →** make sure **TOTP** is enabled (it is by default).
   Admins are required to use it; other members may opt in.
 * Optional: **Attack Protection →** enable CAPTCHA or leaked-password protection if your plan offers it.

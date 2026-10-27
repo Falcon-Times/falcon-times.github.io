@@ -106,10 +106,28 @@ test('writer: forced password change, drafts and submits a story', async ({ brow
   page.on('response', (r) => { if (r.status() >= 400) diag.push(`${r.status()} ${r.request().method()} ${r.url().replace(/\?.*/, '')}`); });
   await signIn(page, '/newsroom/', WRITER.email, WRITER.temp);
   await expect(page.getByRole('heading', { name: 'Choose your own password' })).toBeVisible();
-  await page.getByLabel(/^New password/).fill('short');
-  await page.getByLabel('Confirm new password').fill('short');
-  await page.getByRole('button', { name: 'Save new password' }).click();
-  await expect(page.getByLabel(/^New password/)).toBeVisible(); // still blocked (too short)
+  // The rules are spelled out, tick off live, and block saving until every one is met.
+  const rules = page.getByRole('list', { name: 'Password rules' });
+  const save = page.getByRole('button', { name: 'Save new password' });
+  await expect(rules).toContainText('At least 12 characters');
+  await expect(rules).toContainText('A lowercase letter');
+  await expect(rules).toContainText('An uppercase letter');
+  await expect(rules).toContainText('A digit');
+  for (const [weak, missing] of [
+    ['short', 'At least 12 characters'],
+    ['alllowercaseletters1', 'An uppercase letter'],
+    ['ALLUPPERCASELETTERS1', 'A lowercase letter'],
+    ['NoDigitsInThisPassword', 'A digit'],
+  ] as const) {
+    await page.getByLabel(/^New password/).fill(weak);
+    await page.getByLabel('Confirm new password').fill(weak);
+    await expect(rules.locator('li:not(.ok)', { hasText: missing })).toHaveCount(1); // that rule is flagged as unmet
+    await expect(save).toBeDisabled();
+  }
+  await page.getByLabel(/^New password/).fill(WRITER.password);
+  await expect(rules.locator('li.ok')).toHaveCount(4);
+  await page.getByLabel('Confirm new password').fill('Different1Password');
+  await expect(save).toBeDisabled(); // confirmation must match
   await page.getByLabel(/^New password/).fill(WRITER.password);
   await page.getByLabel('Confirm new password').fill(WRITER.password);
   await page.getByRole('button', { name: 'Save new password' }).click();

@@ -18,10 +18,12 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .auth-brand strong { color: var(--ink); } }
 .auth-h { font-size: 1.5rem; }
 .code-input { font-size: 1.6rem; letter-spacing: 0.4em; text-align: center; font-variant-numeric: tabular-nums; }
+.code-input-wide { font-size: 1.35rem; letter-spacing: 0.12em; }
 .qr { display: grid; place-items: center; padding: 12px; background: #fff; border-radius: var(--radius); border: 1px solid var(--rule); }
 .secret { display: block; margin-top: 8px; word-break: break-all; padding: 8px; }
 .secret-box { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; background: var(--surface-2); border: 1px dashed var(--rule-strong); border-radius: var(--radius-sm); }
 .secret-box code { font-size: 1.05rem; background: none; letter-spacing: 0.04em; word-break: break-all; }
+.secret-box code.bypass-code { font-size: 1.7rem; font-weight: 700; letter-spacing: 0.1em; font-variant-numeric: tabular-nums; word-break: normal; }
 
 /* Frame */
 .console { min-height: 100vh; display: flex; flex-direction: column; }

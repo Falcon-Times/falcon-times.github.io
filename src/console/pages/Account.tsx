@@ -33,7 +33,10 @@ export function Profile() {
     <div class="stack" style={{ '--stack': '18px', maxWidth: '720px' }}>
       <h1 class="page-title">My profile</h1>
       <form class="card-box stack" style={{ '--stack': '16px' }} onSubmit={save}>
-        <TextField label="Display name" value={name} onChange={setName} required max={120} hint="Shown in the newsroom. Your public byline name is set by an admin." />
+        <TextField label="Display name" value={name} onChange={setName} required max={120} hint="Shown inside the newsroom (assignments, notes, the activity log). It isn’t what readers see." />
+        <TextField label="Public byline name" value={person?.name ?? ''} onChange={() => undefined} disabled
+          placeholder="Not set yet"
+          hint={person ? 'This is the name readers see on your stories and on “Meet the newsroom”. It’s set by an admin — ask one if it needs fixing.' : 'Your account isn’t linked to a staff profile yet, so no byline name is set. An admin can link it.'} />
         <div class="muted small">Signed in as <strong>{me.profile.email}</strong></div>
         {person ? (
           <>
@@ -78,6 +81,11 @@ export function Security() {
   return (
     <div class="stack" style={{ '--stack': '22px', maxWidth: '720px' }}>
       <h1 class="page-title">Account security</h1>
+      {me.viaBypass && (
+        <div class="notice notice-warn"><Icon name="key" /><div>
+          You signed in with a one-time bypass code, so this session skipped the authenticator step. Your authenticator still works for next time. If you’ve lost the device, ask an admin to reset your two-factor so you can set up a new one.
+        </div></div>
+      )}
       <section class="card-box"><ChangePassword /></section>
       <section class="card-box stack" style={{ '--stack': '12px' }}>
         <h2 class="h3">Two-factor sign-in</h2>

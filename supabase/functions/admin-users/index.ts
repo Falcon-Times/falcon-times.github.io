@@ -7,6 +7,7 @@
 // database whether the caller is an admin who has passed two-factor (the
 // is_admin() function), so a stolen password alone cannot call it.
 import { createClient } from '@supabase/supabase-js';
+import { PASSWORD_RULES_SUMMARY, isStrongPassword } from '../_shared/passwordPolicy.ts';
 
 // Callers authenticate with a bearer token (not cookies), so a wildcard origin is safe.
 const cors: Record<string, string> = {
@@ -110,7 +111,7 @@ Deno.serve(async (req: Request) => {
         const sections = Array.isArray(body.sections) ? body.sections.filter((s: unknown) => typeof s === 'string') : [];
         const staffId = typeof body.staff_member_id === 'string' && UUID.test(body.staff_member_id) ? body.staff_member_id : null;
         if (!EMAIL.test(email)) throw new HttpError(400, 'Enter a valid email address.');
-        if (password.length < 12) throw new HttpError(400, 'Temporary password must be at least 12 characters.');
+        if (!isStrongPassword(password)) throw new HttpError(400, `That temporary password breaks the password rules. ${PASSWORD_RULES_SUMMARY}`);
         if (!ROLES.includes(role)) throw new HttpError(400, 'Unknown role.');
         if (!name) throw new HttpError(400, 'Enter a display name.');
 
@@ -136,7 +137,7 @@ Deno.serve(async (req: Request) => {
       case 'reset_password': {
         const id = needUser();
         const password = String(body.password ?? '');
-        if (password.length < 12) throw new HttpError(400, 'Temporary password must be at least 12 characters.');
+        if (!isStrongPassword(password)) throw new HttpError(400, `That temporary password breaks the password rules. ${PASSWORD_RULES_SUMMARY}`);
         const { data: existing, error: gErr } = await admin.auth.admin.getUserById(id);
         if (gErr || !existing.user) throw new HttpError(404, 'No such account.');
         const { error } = await admin.auth.admin.updateUserById(id, {

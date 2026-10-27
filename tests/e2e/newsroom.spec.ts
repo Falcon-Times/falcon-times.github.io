@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { TOTP, seedAdmin, signIn } from './helpers';
+import { TOTP, db, seedAdmin, signIn } from './helpers';
 
 // One scripted "week in the newsroom". Tests share state, so they run in order.
 test.describe.configure({ mode: 'serial' });
@@ -8,6 +8,7 @@ const stamp = Date.now().toString(36);
 const ADMIN = { email: `admin-${stamp}@example.test`, password: 'AdminPassw0rd!!' };
 const WRITER = { email: `writer-${stamp}@example.test`, temp: '', password: 'WriterPassw0rd!!' };
 const EDITOR = { email: `editor-${stamp}@example.test`, temp: '', password: 'EditorPassw0rd!!' };
+const ADMIN2 = { email: `admin2-${stamp}@example.test`, temp: '', password: 'SecondAdm1nPass!!' };
 const HEADLINE = `Homecoming float wins big ${stamp}`;
 const TIP = `Someone should look into the cafeteria lines ${stamp}`;
 
@@ -106,14 +107,47 @@ test('writer: forced password change, drafts and submits a story', async ({ brow
   page.on('response', (r) => { if (r.status() >= 400) diag.push(`${r.status()} ${r.request().method()} ${r.url().replace(/\?.*/, '')}`); });
   await signIn(page, '/newsroom/', WRITER.email, WRITER.temp);
   await expect(page.getByRole('heading', { name: 'Choose your own password' })).toBeVisible();
-  await page.getByLabel(/^New password/).fill('short');
-  await page.getByLabel('Confirm new password').fill('short');
-  await page.getByRole('button', { name: 'Save new password' }).click();
-  await expect(page.getByLabel(/^New password/)).toBeVisible(); // still blocked (too short)
+  // The rules are spelled out, tick off live, and block saving until every one is met.
+  const rules = page.getByRole('list', { name: 'Password rules' });
+  const save = page.getByRole('button', { name: 'Save new password' });
+  await expect(rules).toContainText('At least 12 characters');
+  await expect(rules).toContainText('A lowercase letter');
+  await expect(rules).toContainText('An uppercase letter');
+  await expect(rules).toContainText('A digit');
+  for (const [weak, missing] of [
+    ['short', 'At least 12 characters'],
+    ['alllowercaseletters1', 'An uppercase letter'],
+    ['ALLUPPERCASELETTERS1', 'A lowercase letter'],
+    ['NoDigitsInThisPassword', 'A digit'],
+  ] as const) {
+    await page.getByLabel(/^New password/).fill(weak);
+    await page.getByLabel('Confirm new password').fill(weak);
+    await expect(rules.locator('li:not(.ok)', { hasText: missing })).toHaveCount(1); // that rule is flagged as unmet
+    await expect(save).toBeDisabled();
+  }
+  await page.getByLabel(/^New password/).fill(WRITER.password);
+  await expect(rules.locator('li.ok')).toHaveCount(4);
+  await page.getByLabel('Confirm new password').fill('Different1Password');
+  await expect(save).toBeDisabled(); // confirmation must match
   await page.getByLabel(/^New password/).fill(WRITER.password);
   await page.getByLabel('Confirm new password').fill(WRITER.password);
   await page.getByRole('button', { name: 'Save new password' }).click();
   await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Wendy/ })).toBeVisible();
+
+  // My profile: the public byline name comes from the linked staff profile.
+  await page.goto('/newsroom/#/profile');
+  const byline = page.getByLabel('Public byline name');
+  await expect(byline).toBeDisabled();
+  await expect(byline).toHaveValue('');
+  await expect(page.getByText('isn’t linked to a staff profile yet, so no byline name')).toBeVisible();
+  const c = db(); await c.connect();
+  const { rows: [member] } = await c.query('select id, name from public.staff_members order by sort_order limit 1');
+  await c.query('update public.profiles set staff_member_id = $1 where email = $2', [member.id, WRITER.email]);
+  await c.end();
+  await page.reload();
+  await expect(page.getByLabel('Public byline name')).toHaveValue(member.name);
+  await expect(page.getByText('This is the name readers see')).toBeVisible();
+  await page.goto('/newsroom/');
 
   // Writers have no leader tools
   await expect(page.getByRole('link', { name: 'Tip line' })).toHaveCount(0);
@@ -213,6 +247,107 @@ test('admin sees the audit trail and can change a site setting', async () => {
 test('the new tagline is live on the public site', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.tagline')).toHaveText('Straight from the nest');
+});
+
+test('admin adds a second admin, who sets a password and two-factor', async ({ browser }) => {
+  await admin.goto('/admin/#/people');
+  await admin.getByRole('button', { name: 'Add account' }).click();
+  await admin.getByLabel('Email').fill(ADMIN2.email);
+  await admin.getByLabel('Display name').fill('Sam Second');
+  await admin.getByLabel('Role').selectOption({ label: 'Admin' });
+  await admin.getByRole('button', { name: 'Create account' }).click();
+  const code = admin.locator('.secret-box code');
+  await expect(code).toBeVisible();
+  ADMIN2.temp = (await code.textContent())!.trim();
+  await admin.getByRole('button', { name: /shared it/ }).click();
+
+  const page = await newPage(browser);
+  await signIn(page, '/admin/', ADMIN2.email, ADMIN2.temp);
+  await page.getByLabel(/^New password/).fill(ADMIN2.password);
+  await page.getByLabel('Confirm new password').fill(ADMIN2.password);
+  await page.getByRole('button', { name: 'Save new password' }).click();
+  await expect(page.getByRole('heading', { name: 'Set up two-factor sign-in' })).toBeVisible();
+  await page.getByLabel('6-digit code').fill(TOTP);
+  await page.getByRole('button', { name: 'Turn on two-factor' }).click();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Sam/ })).toBeVisible();
+  await page.context().close();
+});
+
+test('a bypass code gets an admin past a missing authenticator — once', async ({ browser }) => {
+  // The first admin makes a code for the second.
+  await admin.goto('/admin/#/people');
+  const row = admin.getByRole('row', { name: new RegExp(ADMIN2.email) });
+  await row.getByRole('button', { name: /Manage/ }).click();
+  await admin.getByLabel('Valid for').selectOption({ label: '1 hour' });
+  await admin.getByRole('button', { name: 'Create bypass code' }).click();
+  const shown = admin.getByTestId('bypass-code');
+  await expect(shown).toHaveText(/^\d{3}-\d{3}-\d{4}$/);
+  const bypass = (await shown.textContent())!.trim();
+  await admin.getByRole('button', { name: /shared it/ }).click();
+  await expect(row.getByText('Bypass code')).toBeVisible(); // outstanding codes are visible to admins
+
+  // The second admin has their password but not their authenticator.
+  const page = await newPage(browser);
+  await signIn(page, '/admin/', ADMIN2.email, ADMIN2.password);
+  await expect(page.getByRole('heading', { name: 'Two-factor code' })).toBeVisible();
+  await page.getByRole('button', { name: /Enter a bypass code/ }).click();
+  const input = page.getByLabel('10-digit bypass code');
+  await input.fill('000-000-0000');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByText('That code didn’t work')).toBeVisible();
+  await input.fill(bypass.replace(/-/g, '')); // typing without dashes is fine; they get added
+  await expect(input).toHaveValue(bypass);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Sam/ })).toBeVisible();
+
+  // The session really has admin rights (not just a front-end gate), and survives a reload.
+  await page.goto('/admin/#/people');
+  await expect(page.getByRole('row', { name: new RegExp(ADMIN.email) })).toBeVisible();
+  await page.goto('/admin/#/security');
+  await expect(page.getByText('You signed in with a one-time bypass code')).toBeVisible();
+  await expect(page.getByLabel(/^New password/)).toBeVisible();
+
+  // The code is spent: it can't be used again, and the "outstanding" marker is gone.
+  const again = await newPage(browser);
+  await signIn(again, '/admin/', ADMIN2.email, ADMIN2.password);
+  await again.getByRole('button', { name: /Enter a bypass code/ }).click();
+  await again.getByLabel('10-digit bypass code').fill(bypass);
+  await again.getByRole('button', { name: 'Sign in' }).click();
+  await expect(again.getByText('That code didn’t work')).toBeVisible();
+  await admin.reload();
+  // Wait for the list to load first (a count of 0 is also what an unloaded page shows), and for the
+  // app to finish mounting before changing the route below.
+  await expect(admin.getByRole('row', { name: new RegExp(ADMIN2.email) })).toBeVisible();
+  await expect(admin.getByRole('row', { name: new RegExp(ADMIN2.email) }).getByText('Bypass code')).toHaveCount(0);
+
+  // Both uses are in the activity log, and the code itself is not.
+  await admin.goto('/admin/#/activity');
+  await expect(admin.getByRole('row', { name: new RegExp(`created a 2FA bypass code for ${ADMIN2.email}`) }).first()).toBeVisible();
+  await expect(admin.getByRole('row', { name: /Sam Second.*signed in with a 2FA bypass code/ }).first()).toBeVisible(); // newest first
+  await expect(admin.getByText(bypass)).toHaveCount(0);
+  await page.context().close();
+  await again.context().close();
+});
+
+test('an unused bypass code can be revoked', async ({ browser }) => {
+  await admin.goto('/admin/#/people');
+  const row = admin.getByRole('row', { name: new RegExp(ADMIN2.email) });
+  await row.getByRole('button', { name: /Manage/ }).click();
+  await admin.getByRole('button', { name: 'Create bypass code' }).click();
+  const bypass = (await admin.getByTestId('bypass-code').textContent())!.trim();
+  await admin.getByRole('button', { name: /shared it/ }).click();
+  await row.getByRole('button', { name: /Manage/ }).click();
+  await admin.getByRole('button', { name: 'Revoke' }).click();
+  await expect(admin.getByText('Bypass code revoked')).toBeVisible();
+  await expect(row.getByText('Bypass code')).toHaveCount(0);
+
+  const page = await newPage(browser);
+  await signIn(page, '/admin/', ADMIN2.email, ADMIN2.password);
+  await page.getByRole('button', { name: /Enter a bypass code/ }).click();
+  await page.getByLabel('10-digit bypass code').fill(bypass);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByText('That code didn’t work')).toBeVisible();
+  await page.context().close();
 });
 
 test('admin can disable an account, which blocks sign-in', async ({ browser }) => {

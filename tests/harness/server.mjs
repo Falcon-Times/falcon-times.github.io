@@ -41,7 +41,7 @@ const pool = new pg.Pool(DB);
 // ---- in-memory auth state --------------------------------------------------
 /** id -> { id, email, password, meta, factors:[{id,status,friendly_name}], banned } */
 const users = new Map();
-/** refresh_token -> { userId, aal } */
+/** refresh_token -> { userId, aal, sid } (like GoTrue, the session id survives refreshes) */
 const refreshTokens = new Map();
 const objects = new Map();
 
@@ -54,15 +54,15 @@ function publicUser(u) {
     banned_until: u.banned ? new Date(Date.now() + 1e12).toISOString() : null,
   };
 }
-function session(u, aal = 'aal1') {
+function session(u, aal = 'aal1', sid = crypto.randomUUID()) {
   const iat = now();
   const access = sign({
     aud: 'authenticated', exp: iat + 3600, iat, iss: `${BASE}/auth/v1`, sub: u.id, email: u.email, role: 'authenticated',
     aal, amr: aal === 'aal2' ? [{ method: 'totp', timestamp: iat }, { method: 'password', timestamp: iat }] : [{ method: 'password', timestamp: iat }],
-    session_id: crypto.randomUUID(), user_metadata: u.meta,
+    session_id: sid, user_metadata: u.meta,
   });
   const refresh = crypto.randomBytes(8).toString('hex');
-  refreshTokens.set(refresh, { userId: u.id, aal });
+  refreshTokens.set(refresh, { userId: u.id, aal, sid });
   return { access_token: access, token_type: 'bearer', expires_in: 3600, expires_at: iat + 3600, refresh_token: refresh, user: publicUser(u) };
 }
 function claims(req) {
@@ -75,6 +75,20 @@ function claims(req) {
   const c = JSON.parse(Buffer.from(body, 'base64url').toString());
   return c.exp && c.exp < now() ? null : c;
 }
+
+/** Mirrors the dashboard setting: 12+ characters with lowercase, uppercase and a digit. */
+function weakPasswordReasons(pw) {
+  const reasons = [];
+  if (String(pw ?? '').length < 12) reasons.push('length');
+  if (!/[a-z]/.test(pw) || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw)) reasons.push('characters');
+  return reasons;
+}
+const weak = (res, pw) => {
+  const reasons = weakPasswordReasons(pw);
+  if (!reasons.length) return false;
+  send(res, 422, { code: 422, error_code: 'weak_password', msg: 'Password should be at least 12 characters and contain lowercase, uppercase and digits.', weak_password: { reasons } });
+  return true;
+};
 
 export async function createUser({ email, password, meta = {} }) {
   const id = crypto.randomUUID();
@@ -175,7 +189,7 @@ const server = http.createServer(async (req, res) => {
       if (grant === 'refresh_token') {
         const r = refreshTokens.get(body.refresh_token);
         if (!r) return err(res, 400, 'Invalid Refresh Token', 'refresh_token_not_found');
-        return send(res, 200, session(users.get(r.userId), r.aal));
+        return send(res, 200, session(users.get(r.userId), r.aal, r.sid));
       }
       return err(res, 400, 'unsupported grant');
     }
@@ -186,6 +200,7 @@ const server = http.createServer(async (req, res) => {
       const u = users.get(c.sub);
       if (req.method === 'PUT') {
         const b = JSON.parse((await readBody(req)).toString() || '{}');
+        if (b.password && weak(res, b.password)) return;
         if (b.password) u.password = b.password;
         if (b.data) u.meta = { ...u.meta, ...b.data };
         return send(res, 200, publicUser(u));
@@ -212,7 +227,7 @@ const server = http.createServer(async (req, res) => {
       if (body.code !== TOTP_CODE) return err(res, 422, 'Invalid TOTP code entered', 'mfa_verification_failed');
       const f = u.factors.find((x) => x.id === m[1]);
       if (f) f.status = 'verified';
-      return send(res, 200, session(u, 'aal2'));
+      return send(res, 200, session(u, 'aal2', c.session_id));
     }
     if ((m = path.match(/^\/auth\/v1\/factors\/([^/]+)$/)) && req.method === 'DELETE') {
       const c = claims(req); if (!c) return err(res, 401, 'invalid JWT');
@@ -227,6 +242,7 @@ const server = http.createServer(async (req, res) => {
       if (!c || c.role !== 'service_role') return err(res, 403, 'not admin');
       if (path === '/auth/v1/admin/users' && req.method === 'POST') {
         const b = JSON.parse((await readBody(req)).toString() || '{}');
+        if (weak(res, b.password)) return;
         if (byEmail(b.email)) return err(res, 422, 'A user with this email address has already been registered', 'email_exists');
         const u = await createUser({ email: b.email, password: b.password, meta: b.user_metadata ?? {} });
         return send(res, 200, publicUser(u));
@@ -241,6 +257,7 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'GET') return send(res, 200, publicUser(u));
         if (req.method === 'PUT') {
           const b = JSON.parse((await readBody(req)).toString() || '{}');
+          if (b.password && weak(res, b.password)) return;
           if (b.password) u.password = b.password;
           if (b.user_metadata) u.meta = b.user_metadata;
           if (b.ban_duration) u.banned = b.ban_duration !== 'none';

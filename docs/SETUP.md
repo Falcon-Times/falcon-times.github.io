@@ -38,7 +38,11 @@ Under **Authentication** in the Supabase dashboard:
 
 * **Sign In / Providers →** turn **off** *Allow new users to sign up*.
   Accounts are created only by an admin from the admin panel.
-* **Sign In / Providers → Email →** set *Minimum password length* to **12** or more.
+* **Sign In / Providers → Email →** set *Minimum password length* to **12** and *Password requirements*
+  to **Lowercase, uppercase letters and digits**. The sign-in screens already explain and check exactly
+  these rules; if you ever change them in the dashboard, update
+  `supabase/functions/_shared/passwordPolicy.ts` to match (Supabase is the authority, that file just
+  produces the friendly messages).
 * **Multi-Factor →** make sure **TOTP** is enabled (it is by default).
   Admins are required to use it; other members may opt in.
 * Optional: **Attack Protection →** enable CAPTCHA or leaked-password protection if your plan offers it.
@@ -106,6 +110,16 @@ In the admin panel → **People & access → Add account**.
 * *Link a staff profile* so they can edit their own bio and photo from **My profile**.
 * Share [docs/CONTENT-GUIDE.md](CONTENT-GUIDE.md) and the address `https://falcon-times.github.io/newsroom/` with them.
 * To disable someone (graduated, left the club) use **Manage → Account enabled**. Their stories stay.
+* **Lost phone or forgot the authenticator?** Open their row (**Manage → Two-factor bypass code**), choose how
+  long the code is valid (15 minutes to 24 hours) and press *Create bypass code*. Read them the 10 digits
+  (shown once, e.g. `482-915-7306`). On the two-factor screen they pick *Can't use your authenticator?*, type
+  the code, and are in — their authenticator stays set up, so you don't need to reset it. A code works
+  **once**, only for that person, only after they've entered their own password, and dies after 5 wrong
+  guesses. The session it unlocks lasts 8 hours. Every code made or used is in the Activity log. Use
+  *Reset two-factor* instead only if the device is gone for good.
+  *(An admin can't make a code for themselves — ask another admin. If the only admin loses their
+  authenticator, recover with the SQL editor: `delete from auth.mfa_factors where user_id = (select id from auth.users where email = 'you@example.org');`
+  then sign in and set up a new authenticator.)*
 
 ## 8. Make it yours (admin panel)
 

@@ -147,6 +147,12 @@ test('writer: forced password change, drafts and submits a story', async ({ brow
   await page.reload();
   await expect(page.getByLabel('Public byline name')).toHaveValue(member.name);
   await expect(page.getByText('This is the name readers see')).toBeVisible();
+  // It must look read-only, not just be: tinted and dashed unlike the editable display-name box.
+  const look = (loc: ReturnType<Page['locator']>) => loc.evaluate((el) => { const c = getComputedStyle(el); return `${c.backgroundColor}|${c.borderTopStyle}`; });
+  expect(await look(page.getByLabel('Public byline name'))).not.toBe(await look(page.getByLabel('Display name')));
+  expect(await look(page.getByLabel('Public byline name'))).toContain('dashed');
+  const tag = await page.locator('.field', { has: page.getByLabel('Public byline name') }).locator('.label').evaluate((el) => getComputedStyle(el, '::after').content);
+  expect(tag).toContain('read-only'); // the label says so too
   await page.goto('/newsroom/');
 
   // Writers have no leader tools

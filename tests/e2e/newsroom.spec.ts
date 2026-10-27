@@ -315,6 +315,9 @@ test('a bypass code gets an admin past a missing authenticator — once', async 
   await again.getByRole('button', { name: 'Sign in' }).click();
   await expect(again.getByText('That code didn’t work')).toBeVisible();
   await admin.reload();
+  // Wait for the list to load first (a count of 0 is also what an unloaded page shows), and for the
+  // app to finish mounting before changing the route below.
+  await expect(admin.getByRole('row', { name: new RegExp(ADMIN2.email) })).toBeVisible();
   await expect(admin.getByRole('row', { name: new RegExp(ADMIN2.email) }).getByText('Bypass code')).toHaveCount(0);
 
   // Both uses are in the activity log, and the code itself is not.

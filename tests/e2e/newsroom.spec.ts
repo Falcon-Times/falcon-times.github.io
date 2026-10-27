@@ -364,6 +364,9 @@ test('each account action says what it does, and admins see why they can\'t use 
   await expect(dialog.getByText('Doesn’t touch two-factor')).toBeVisible();
   await expect(dialog.getByText('Lost their authenticator for good?')).toBeVisible();
   await expect(dialog.getByText('Their password and authenticator both stay as they are')).toBeVisible();
+  const enabled = dialog.getByLabel('Account enabled');
+  await expect(enabled).toBeChecked();
+  await expect(enabled).toBeDisabled(); // you can't switch off your own account, so don't offer it
   for (const name of ['Reset password', 'Reset two-factor', 'Create bypass code']) {
     await expect(dialog.getByRole('button', { name })).toBeDisabled(); // not on your own account
   }

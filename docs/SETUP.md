@@ -110,6 +110,14 @@ In the admin panel → **People & access → Add account**.
 * *Link a staff profile* so they can edit their own bio and photo from **My profile**.
 * Share [docs/CONTENT-GUIDE.md](CONTENT-GUIDE.md) and the address `https://falcon-times.github.io/newsroom/` with them.
 * To disable someone (graduated, left the club) use **Manage → Account enabled**. Their stories stay.
+* **Which button?** In **Manage** each account action says what it does; in short:
+
+  | Problem | Use | What happens |
+  | --- | --- | --- |
+  | Forgot their **password** | *Reset password* | Replaces it with a one-time temporary password you hand over; they choose their own at next sign-in. Two-factor is untouched. |
+  | Forgot their **phone** today | *Create bypass code* | A one-time code gets them past the authenticator step once. Password and authenticator stay as they are. |
+  | Lost the authenticator **for good** | *Reset two-factor* | Removes the authenticator; they set up a new one. Password is untouched. |
+
 * **Lost phone or forgot the authenticator?** Open their row (**Manage → Two-factor bypass code**), choose how
   long the code is valid (15 minutes to 24 hours) and press *Create bypass code*. Read them the 10 digits
   (shown once, e.g. `482-915-7306`). On the two-factor screen they pick *Can't use your authenticator?*, type

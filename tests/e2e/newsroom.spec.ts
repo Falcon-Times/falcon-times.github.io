@@ -356,6 +356,21 @@ test('an unused bypass code can be revoked', async ({ browser }) => {
   await page.context().close();
 });
 
+test('each account action says what it does, and admins see why they can\'t use them on themselves', async () => {
+  await admin.goto('/admin/#/people');
+  await admin.getByRole('row', { name: new RegExp(ADMIN.email) }).getByRole('button', { name: /Manage/ }).click();
+  const dialog = admin.getByRole('dialog');
+  await expect(dialog.getByText('Forgot their password? Replaces it with a one-time temporary password')).toBeVisible();
+  await expect(dialog.getByText('Doesn’t touch two-factor')).toBeVisible();
+  await expect(dialog.getByText('Lost their authenticator for good?')).toBeVisible();
+  await expect(dialog.getByText('Their password and authenticator both stay as they are')).toBeVisible();
+  for (const name of ['Reset password', 'Reset two-factor', 'Create bypass code']) {
+    await expect(dialog.getByRole('button', { name })).toBeDisabled(); // not on your own account
+  }
+  await expect(dialog.getByText('ask another admin')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+});
+
 test('admin can disable an account, which blocks sign-in', async ({ browser }) => {
   await admin.goto('/admin/#/people');
   await admin.getByRole('row', { name: new RegExp(WRITER.email) }).getByRole('button', { name: /Manage/ }).click();

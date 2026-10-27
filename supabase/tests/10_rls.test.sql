@@ -6,10 +6,10 @@ begin;
 create schema tests;
 grant usage on schema tests to public;
 
-create function tests.login(uid uuid, aal text default 'aal1') returns void language plpgsql as $$
+create function tests.login(uid uuid, aal text default 'aal1', sid uuid default null) returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claims',
-    json_build_object('sub', uid, 'role', 'authenticated', 'aal', aal)::text, true);
+    json_build_object('sub', uid, 'role', 'authenticated', 'aal', aal, 'session_id', sid)::text, true);
   execute 'set local role authenticated';
 end $$;
 create function tests.anon() returns void language plpgsql as $$
@@ -252,6 +252,99 @@ select tests.anon();
 select tests.fails($$insert into storage.objects (bucket_id, name) values ('media', 'evil.jpg')$$, 'anon cannot upload', 'permission denied');
 select tests.login('00000000-0000-0000-0000-000000000006');
 select tests.fails($$insert into storage.objects (bucket_id, name, owner) values ('media', 'evil.jpg', auth.uid())$$, 'users without a profile cannot upload', 'row-level security');
+
+-- ------------------------------------------------------------ 2FA bypass codes
+select tests.logout();
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-000000000011', 'admin2@example.test'),
+  ('00000000-0000-0000-0000-000000000012', 'lost.phone@example.test');
+insert into public.profiles (id, email, display_name, role, active) values
+  ('00000000-0000-0000-0000-000000000011', 'admin2@example.test', 'Second Admin', 'admin', true),
+  ('00000000-0000-0000-0000-000000000012', 'lost.phone@example.test', 'Lost Phone', 'admin', true);
+
+select tests.login('00000000-0000-0000-0000-000000000004', 'aal2');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000012')$$, 'writers cannot make bypass codes', 'Only admins');
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal1');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000012')$$, 'admins without 2FA cannot make bypass codes', 'Only admins');
+select tests.anon();
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000012')$$, 'anon cannot make bypass codes', 'permission denied');
+select tests.fails($$select public.redeem_mfa_bypass('1234567890')$$, 'anon cannot redeem bypass codes', 'permission denied');
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1');
+select tests.fails($$select * from private.mfa_bypass_codes$$, 'signed-in users cannot read the code table', 'permission denied');
+select tests.fails($$select * from private.mfa_bypass_sessions$$, 'signed-in users cannot read bypass sessions', 'permission denied');
+
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal2');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000011')$$, 'admins cannot make a bypass code for themselves', 'another admin');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000012', 1)$$, 'bypass codes last at least 5 minutes', 'between 5 minutes');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000012', 5000)$$, 'bypass codes last at most 24 hours', 'between 5 minutes');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000099')$$, 'bypass codes need a real account', 'No active account');
+select set_config('tests.code', public.create_mfa_bypass('00000000-0000-0000-0000-000000000012', 30), false);
+select tests.eq(current_setting('tests.code') ~ '^[0-9]{10}$', true, 'a bypass code is 10 digits');
+select tests.eq(tests.count('select 1 from public.mfa_bypass_overview()'), 1::bigint, 'admin sees the outstanding code');
+select tests.eq((select user_id from public.mfa_bypass_overview()), '00000000-0000-0000-0000-000000000012'::uuid, 'overview names who holds it');
+select tests.logout();
+select tests.eq(tests.count($$select 1 from private.mfa_bypass_codes where code_hash = current_setting('tests.code') or code_hash not like '$2%'$$), 0::bigint, 'only a bcrypt hash of the code is stored');
+select tests.eq(tests.count($$select 1 from public.audit_log where summary like 'created a 2FA bypass code for lost.phone@example.test%'$$), 1::bigint, 'creating a code is audited');
+select tests.eq(tests.count($$select 1 from public.audit_log where summary like '%' || current_setting('tests.code') || '%'$$), 0::bigint, 'the code itself is never logged');
+
+-- the person it was made for
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000001');
+select tests.eq(public.mfa_bypass_active(), false, 'no bypass before redeeming');
+select tests.eq(public.is_admin(), false, 'password-only admin is not admin');
+select tests.eq(tests.count('select 1 from public.mfa_bypass_overview()'), 0::bigint, 'non-admins see no overview');
+select tests.eq(public.redeem_mfa_bypass('0000000000'), false, 'a wrong code is refused');
+select tests.eq(public.redeem_mfa_bypass('12'), false, 'a malformed code is refused');
+select tests.eq(public.is_admin(), false, 'still not admin after a wrong guess');
+select tests.login('00000000-0000-0000-0000-000000000004', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000002');
+select tests.eq(public.redeem_mfa_bypass(current_setting('tests.code')), false, 'someone else cannot redeem the code');
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1');
+select tests.eq(public.redeem_mfa_bypass(current_setting('tests.code')), false, 'a session without an id cannot redeem');
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000001');
+select tests.eq(public.redeem_mfa_bypass(substr(current_setting('tests.code'), 1, 3) || ' - ' || substr(current_setting('tests.code'), 4, 3) || '-' || substr(current_setting('tests.code'), 7)), true, 'the right code works, however it is typed');
+select tests.eq(public.mfa_bypass_active(), true, 'the session is now bypassed');
+select tests.eq(public.is_admin(), true, 'a bypassed admin session has admin rights');
+select tests.eq(tests.count('select 1 from public.tips'), 3::bigint, 'and can read admin-only data');
+select tests.eq(public.redeem_mfa_bypass(current_setting('tests.code')), false, 'a code works only once');
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000003');
+select tests.eq(public.is_admin(), false, 'a different login session is not bypassed');
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000001');
+select tests.eq(public.is_admin(), false, 'nor is another account on the same session id');
+select tests.logout();
+update private.mfa_bypass_sessions set expires_at = now() - interval '1 minute';
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000001');
+select tests.eq(public.is_admin(), false, 'a bypassed session expires');
+select tests.logout();
+select tests.eq(tests.count($$select 1 from public.audit_log where summary = 'signed in with a 2FA bypass code' and actor_email = 'lost.phone@example.test'$$), 1::bigint, 'using a code is audited');
+
+-- guess limit, replacement, revoking, expiry
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal2');
+select set_config('tests.code', public.create_mfa_bypass('00000000-0000-0000-0000-000000000012', 60), false);
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000004');
+select tests.eq(
+  (select (public.redeem_mfa_bypass(case when current_setting('tests.code') = '1111111111' then '2222222222' else '1111111111' end)) from generate_series(1, 5) group by 1),
+  false, 'five wrong guesses are all refused');
+select tests.eq(public.redeem_mfa_bypass(current_setting('tests.code')), false, 'after five wrong guesses even the right code is dead');
+select tests.eq(public.is_admin(), false, 'so the session is not bypassed');
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal2');
+select tests.eq((select failed_attempts from public.mfa_bypass_overview()), 5, 'admin can see that it was locked');
+select tests.eq(tests.count($$select 1 from public.audit_log where summary like '2FA bypass code locked%'$$), 1::bigint, 'locking is audited');
+select set_config('tests.old', public.create_mfa_bypass('00000000-0000-0000-0000-000000000012', 60), false);
+select set_config('tests.code', public.create_mfa_bypass('00000000-0000-0000-0000-000000000012', 60), false);
+select tests.eq(tests.count('select 1 from public.mfa_bypass_overview()'), 1::bigint, 'a new code replaces the old one');
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000005');
+select tests.eq(public.redeem_mfa_bypass(current_setting('tests.old')), false, 'the replaced code no longer works');
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal2');
+select public.revoke_mfa_bypass('00000000-0000-0000-0000-000000000012');
+select tests.eq(tests.count('select 1 from public.mfa_bypass_overview()'), 0::bigint, 'revoking clears the outstanding code');
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000005');
+select tests.eq(public.redeem_mfa_bypass(current_setting('tests.code')), false, 'a revoked code no longer works');
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal2');
+select set_config('tests.code', public.create_mfa_bypass('00000000-0000-0000-0000-000000000012', 5), false);
+select tests.logout();
+update private.mfa_bypass_codes set expires_at = now() - interval '1 second' where used_at is null;
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000005');
+select tests.eq(public.redeem_mfa_bypass(current_setting('tests.code')), false, 'an expired code no longer works');
+select tests.eq(public.is_admin(), false, 'and grants nothing');
 
 -- ------------------------------------------------------------ server-side invariants
 select tests.logout();

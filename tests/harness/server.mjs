@@ -41,7 +41,7 @@ const pool = new pg.Pool(DB);
 // ---- in-memory auth state --------------------------------------------------
 /** id -> { id, email, password, meta, factors:[{id,status,friendly_name}], banned } */
 const users = new Map();
-/** refresh_token -> { userId, aal } */
+/** refresh_token -> { userId, aal, sid } (like GoTrue, the session id survives refreshes) */
 const refreshTokens = new Map();
 const objects = new Map();
 
@@ -54,15 +54,15 @@ function publicUser(u) {
     banned_until: u.banned ? new Date(Date.now() + 1e12).toISOString() : null,
   };
 }
-function session(u, aal = 'aal1') {
+function session(u, aal = 'aal1', sid = crypto.randomUUID()) {
   const iat = now();
   const access = sign({
     aud: 'authenticated', exp: iat + 3600, iat, iss: `${BASE}/auth/v1`, sub: u.id, email: u.email, role: 'authenticated',
     aal, amr: aal === 'aal2' ? [{ method: 'totp', timestamp: iat }, { method: 'password', timestamp: iat }] : [{ method: 'password', timestamp: iat }],
-    session_id: crypto.randomUUID(), user_metadata: u.meta,
+    session_id: sid, user_metadata: u.meta,
   });
   const refresh = crypto.randomBytes(8).toString('hex');
-  refreshTokens.set(refresh, { userId: u.id, aal });
+  refreshTokens.set(refresh, { userId: u.id, aal, sid });
   return { access_token: access, token_type: 'bearer', expires_in: 3600, expires_at: iat + 3600, refresh_token: refresh, user: publicUser(u) };
 }
 function claims(req) {
@@ -189,7 +189,7 @@ const server = http.createServer(async (req, res) => {
       if (grant === 'refresh_token') {
         const r = refreshTokens.get(body.refresh_token);
         if (!r) return err(res, 400, 'Invalid Refresh Token', 'refresh_token_not_found');
-        return send(res, 200, session(users.get(r.userId), r.aal));
+        return send(res, 200, session(users.get(r.userId), r.aal, r.sid));
       }
       return err(res, 400, 'unsupported grant');
     }
@@ -227,7 +227,7 @@ const server = http.createServer(async (req, res) => {
       if (body.code !== TOTP_CODE) return err(res, 422, 'Invalid TOTP code entered', 'mfa_verification_failed');
       const f = u.factors.find((x) => x.id === m[1]);
       if (f) f.status = 'verified';
-      return send(res, 200, session(u, 'aal2'));
+      return send(res, 200, session(u, 'aal2', c.session_id));
     }
     if ((m = path.match(/^\/auth\/v1\/factors\/([^/]+)$/)) && req.method === 'DELETE') {
       const c = claims(req); if (!c) return err(res, 401, 'invalid JWT');

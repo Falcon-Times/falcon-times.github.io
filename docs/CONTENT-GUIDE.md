@@ -6,6 +6,7 @@ email and temporary password your admin gave you. The first time, you'll choose 
 did what.
 
 > Section leaders: we recommend turning on two-factor under **Account security**.
+> Forgot your phone? An admin can give you a one-time **bypass code** to get in without it.
 
 ## Writing a story (everyone)
 

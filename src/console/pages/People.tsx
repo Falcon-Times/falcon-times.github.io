@@ -7,8 +7,9 @@ import { Icon } from '@/ui/Icon';
 import { Modal } from '@/ui/Modal';
 import { Empty, ErrorNote, Loading } from '@/ui/States';
 import { toast, toastError } from '@/ui/Toast';
-import { adminUsers, listProfiles, type AdminUserInfo } from '../api';
+import { adminUsers, createBypassCode, listBypass, listProfiles, revokeBypass, type AdminUserInfo, type BypassInfo } from '../api';
 import { useMe } from '../auth';
+import { formatBypassCode } from '../bypassCode';
 import { Checkbox, SectionPicker, SelectField, TextField } from '../fields';
 import { useRefs } from '../refs';
 
@@ -34,6 +35,8 @@ export function People() {
   const [error, setError] = useState<unknown>(null);
   const [editing, setEditing] = useState<Profile | 'new' | null>(null);
   const [credential, setCredential] = useState<{ email: string; password: string } | null>(null);
+  const [bypassCode, setBypassCode] = useState<{ name: string; code: string; expiresAt: string } | null>(null);
+  const [bypass, setBypass] = useState<Record<string, BypassInfo>>({});
   const [tick, setTick] = useState(0);
   const refresh = () => { setTick((t) => t + 1); reload(); };
 
@@ -42,6 +45,7 @@ export function People() {
     adminUsers<{ users: AdminUserInfo[] }>({ action: 'list' })
       .then((r) => setInfo(Object.fromEntries(r.users.map((u) => [u.id, u]))))
       .catch(() => undefined); // function not deployed yet → just hide the extra columns
+    listBypass().then((r) => setBypass(Object.fromEntries(r.map((b) => [b.user_id, b])))).catch(() => undefined);
   }, [tick]);
 
   const admins = useMemo(() => (rows ?? []).filter((r) => r.role === 'admin' && r.active).length, [rows]);
@@ -70,7 +74,7 @@ export function People() {
                     <td><strong>{p.display_name || '—'}</strong>{p.id === me.userId && <span class="badge" style={{ marginLeft: '6px' }}>You</span>}<div class="small muted">{p.email}</div></td>
                     <td><span class={`badge ${ROLE_BADGE[p.role]}`}>{ROLE_LABEL[p.role]}</span>{!p.active && <span class="badge badge-bad" style={{ marginLeft: '6px' }}>Disabled</span>}</td>
                     <td class="small">{p.role === 'admin' ? <span class="muted">All</span> : p.sections.map(sectionName).join(', ') || <span class="muted">None assigned</span>}</td>
-                    <td>{i ? <span class={`badge ${i.mfa ? 'badge-ok' : ''}`}>{i.mfa ? 'On' : 'Off'}</span> : '—'}</td>
+                    <td>{i ? <span class={`badge ${i.mfa ? 'badge-ok' : ''}`}>{i.mfa ? 'On' : 'Off'}</span> : '—'}{bypass[p.id] && <span class="badge badge-warn" style={{ marginLeft: '6px' }} title={`Expires ${new Date(bypass[p.id].expires_at).toLocaleString()}`}>Bypass code</span>}</td>
                     <td class="small nowrap">{i?.last_sign_in_at ? timeAgo(i.last_sign_in_at) : <span class="muted">Never</span>}</td>
                     <td class="col-actions"><button class="btn btn-sm" onClick={() => setEditing(p)}><Icon name="pencil" size={13} /> Manage</button></td>
                   </tr>
@@ -83,9 +87,11 @@ export function People() {
       {editing === 'new' && <CreateModal onClose={() => setEditing(null)} onCreated={(c) => { setEditing(null); setCredential(c); refresh(); }} />}
       {editing && editing !== 'new' && (
         <EditModal person={editing} isSelf={editing.id === me.userId} lastAdmin={editing.role === 'admin' && editing.active && admins <= 1}
-          onClose={() => setEditing(null)} onSaved={() => { setEditing(null); refresh(); }} onCredential={setCredential} />
+          bypass={bypass[editing.id]} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); refresh(); }}
+          onCredential={setCredential} onBypass={(b) => { setEditing(null); setBypassCode(b); refresh(); }} />
       )}
       {credential && <CredentialModal {...credential} onClose={() => setCredential(null)} />}
+      {bypassCode && <BypassModal {...bypassCode} onClose={() => setBypassCode(null)} />}
     </div>
   );
 }
@@ -97,6 +103,22 @@ function CredentialModal({ email, password, onClose }: { email: string; password
         <div class="notice notice-warn"><Icon name="warning" /><div>This is the only time the password is shown. Share it with <strong>{email}</strong> in person or over a private message — not in a group chat. They’ll be asked to choose their own at first sign-in.</div></div>
         <div class="secret-box"><code>{password}</code><button class="btn btn-sm" onClick={() => { navigator.clipboard.writeText(password); toast('Copied', 'ok'); }}><Icon name="copy" size={14} /> Copy</button></div>
         <p class="small muted">Sign-in address: <code>{location.origin}/newsroom/</code></p>
+      </div>
+    </Modal>
+  );
+}
+
+function BypassModal({ name, code, expiresAt, onClose }: { name: string; code: string; expiresAt: string; onClose: () => void }) {
+  const shown = formatBypassCode(code);
+  return (
+    <Modal title="Two-factor bypass code" onClose={onClose} footer={<button class="btn btn-primary" onClick={onClose}>I’ve shared it</button>}>
+      <div class="stack" style={{ '--stack': '12px' }}>
+        <div class="notice notice-warn"><Icon name="warning" /><div>
+          This is the only time the code is shown. Give it to <strong>{name}</strong> in person or over the phone. It works <strong>once</strong>, only for them, and only after they sign in with their own password.
+        </div></div>
+        <div class="secret-box"><code class="bypass-code" data-testid="bypass-code">{shown}</code><button class="btn btn-sm" onClick={() => { navigator.clipboard.writeText(shown); toast('Copied', 'ok'); }}><Icon name="copy" size={14} /> Copy</button></div>
+        <p class="small muted">Expires at <strong>{new Date(expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</strong> ({new Date(expiresAt).toLocaleDateString()}), or after 5 wrong tries.
+          On the two-factor screen they choose “Can’t use your authenticator?” and type the digits (dashes optional). Their authenticator stays set up.</p>
       </div>
     </Modal>
   );
@@ -137,9 +159,15 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
   );
 }
 
-function EditModal({ person, isSelf, lastAdmin, onClose, onSaved, onCredential }: {
-  person: Profile; isSelf: boolean; lastAdmin: boolean; onClose: () => void; onSaved: () => void;
+const BYPASS_WINDOWS = [
+  { value: '15', label: '15 minutes' }, { value: '60', label: '1 hour' },
+  { value: '240', label: '4 hours' }, { value: '1440', label: '24 hours' },
+];
+
+function EditModal({ person, isSelf, lastAdmin, bypass, onClose, onSaved, onCredential, onBypass }: {
+  person: Profile; isSelf: boolean; lastAdmin: boolean; bypass?: BypassInfo; onClose: () => void; onSaved: () => void;
   onCredential: (c: { email: string; password: string }) => void;
+  onBypass: (b: { name: string; code: string; expiresAt: string }) => void;
 }) {
   const { sections, staff } = useRefs();
   const [name, setName] = useState(person.display_name);
@@ -147,6 +175,7 @@ function EditModal({ person, isSelf, lastAdmin, onClose, onSaved, onCredential }
   const [secs, setSecs] = useState<string[]>(person.sections);
   const [staffId, setStaffId] = useState(person.staff_member_id ?? '');
   const [active, setActive] = useState(person.active);
+  const [lifespan, setLifespan] = useState('60');
   const [busy, setBusy] = useState(false);
 
   async function run<T>(fn: () => Promise<T>, ok: string, done = true) {
@@ -166,6 +195,12 @@ function EditModal({ person, isSelf, lastAdmin, onClose, onSaved, onCredential }
   };
   const resetMfa = () => confirm(`Remove ${person.email}’s two-factor device? They’ll set up a new one at next sign-in.`) &&
     run(() => adminUsers({ action: 'reset_mfa', user_id: person.id }), 'Two-factor reset');
+  const makeBypass = () => run(async () => {
+    const minutes = Number(lifespan);
+    const code = await createBypassCode(person.id, minutes);
+    onBypass({ name: person.display_name || person.email, code, expiresAt: new Date(Date.now() + minutes * 60_000).toISOString() });
+  }, 'Bypass code created', false);
+  const cancelBypass = () => run(() => revokeBypass(person.id), 'Bypass code revoked');
   const remove = () => confirm(`Permanently delete ${person.email}? Their stories stay on the site but lose the account link. Consider disabling instead.`) &&
     run(() => adminUsers({ action: 'delete', user_id: person.id }), 'Account deleted');
 
@@ -194,6 +229,25 @@ function EditModal({ person, isSelf, lastAdmin, onClose, onSaved, onCredential }
         </div>
         {isSelf && <p class="small muted">Manage your own password and two-factor under “Account security”.</p>}
       </div>
+      {!isSelf && (
+        <>
+          <hr class="rule" />
+          <div class="stack" style={{ '--stack': '10px' }}>
+            <h3 class="h3">Two-factor bypass code</h3>
+            <p class="small muted">Lost their phone, or left it at home? Give them a one-time code to get past the authenticator step — no need to turn two-factor off. It works once, only for {person.display_name || 'this person'}, and they still need their password.</p>
+            {bypass && (
+              <div class={`notice ${bypass.failed_attempts >= 5 ? 'notice-bad' : ''}`}><Icon name="key" /><div class="spread grow">
+                <span>{bypass.failed_attempts >= 5 ? 'The outstanding code was locked after 5 wrong tries.' : `A code is outstanding until ${new Date(bypass.expires_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`} Making a new one replaces it.</span>
+                <button class="btn btn-sm" disabled={busy} onClick={cancelBypass}>Revoke</button>
+              </div></div>
+            )}
+            <div class="row" style={{ 'align-items': 'flex-end' }}>
+              <SelectField label="Valid for" value={lifespan} onChange={setLifespan} options={BYPASS_WINDOWS} />
+              <button class="btn" disabled={busy || !person.active} onClick={makeBypass}><Icon name="key" size={15} /> Create bypass code</button>
+            </div>
+          </div>
+        </>
+      )}
     </Modal>
   );
 }

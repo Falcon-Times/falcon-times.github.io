@@ -190,4 +190,21 @@ export async function adminUsers<T = unknown>(body: AdminCall): Promise<T> {
   return data as T;
 }
 
+// ------------------------------------------------------- 2FA bypass codes
+export interface BypassInfo { user_id: string; expires_at: string; failed_attempts: number }
+/** Admin: make a one-time code for someone else. The 10 digits are returned once and never stored in clear. */
+export async function createBypassCode(userId: string, minutes: number): Promise<string> {
+  const res = await db().rpc('create_mfa_bypass', { p_user: userId, p_minutes: minutes });
+  if (res.error) throw new Error(res.error.message);
+  return res.data as string;
+}
+/** Admin: who currently holds an unused code. */
+export async function listBypass(): Promise<BypassInfo[]> {
+  return unwrap(await db().rpc('mfa_bypass_overview')) as BypassInfo[];
+}
+export async function revokeBypass(userId: string) {
+  const res = await db().rpc('revoke_mfa_bypass', { p_user: userId });
+  if (res.error) throw new Error(res.error.message);
+}
+
 export type { ArticleStatus };

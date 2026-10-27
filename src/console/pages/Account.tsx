@@ -81,6 +81,11 @@ export function Security() {
   return (
     <div class="stack" style={{ '--stack': '22px', maxWidth: '720px' }}>
       <h1 class="page-title">Account security</h1>
+      {me.viaBypass && (
+        <div class="notice notice-warn"><Icon name="key" /><div>
+          You signed in with a one-time bypass code, so this session skipped the authenticator step. Your authenticator still works for next time. If you’ve lost the device, ask an admin to reset your two-factor so you can set up a new one.
+        </div></div>
+      )}
       <section class="card-box"><ChangePassword /></section>
       <section class="card-box stack" style={{ '--stack': '12px' }}>
         <h2 class="h3">Two-factor sign-in</h2>

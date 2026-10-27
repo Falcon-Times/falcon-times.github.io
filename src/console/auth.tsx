@@ -9,6 +9,7 @@ import type { Profile } from '@/lib/types';
 import { Icon } from '@/ui/Icon';
 import { Logo } from '@/ui/Logo';
 import { Loading } from '@/ui/States';
+import { formatBypassCode } from './bypassCode';
 import { DEFAULT_LABEL, setLabel } from './mfaLabels';
 import { toastError } from '@/ui/Toast';
 
@@ -18,6 +19,7 @@ export interface Me {
   profile: Profile;
   isEditor: boolean;     // section leader or admin
   isAdmin: boolean;
+  viaBypass: boolean;    // signed in with a 2FA bypass code instead of an authenticator code
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -36,7 +38,7 @@ type Phase =
   | { name: 'mfa-enroll'; forced: boolean }
   | { name: 'password' }
   | { name: 'no-access'; reason: string }
-  | { name: 'ready'; session: Session; profile: Profile };
+  | { name: 'ready'; session: Session; profile: Profile; viaBypass: boolean };
 
 export function AuthGate({ require: needs, title, children }: {
   require: 'staff' | 'admin'; title: string; children: ComponentChildren;
@@ -50,7 +52,9 @@ export function AuthGate({ require: needs, title, children }: {
     if (!session) return setPhase({ name: 'signed-out' });
 
     const { data: aal } = await db.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+    // An admin's one-time bypass code stands in for the authenticator step for this login only.
+    const viaBypass = aal?.currentLevel !== 'aal2' && (await db.rpc('mfa_bypass_active')).data === true;
+    if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2' && !viaBypass) {
       const { data: factors } = await db.auth.mfa.listFactors();
       const factor = factors?.totp?.[0];
       if (factor) return setPhase({ name: 'mfa-verify', factorId: factor.id });
@@ -64,8 +68,8 @@ export function AuthGate({ require: needs, title, children }: {
       return setPhase({ name: 'no-access', reason: 'This area is for site admins only.' });
     }
     if (session.user.user_metadata?.must_change_password) return setPhase({ name: 'password' });
-    if (profile.role === 'admin' && aal?.currentLevel !== 'aal2') return setPhase({ name: 'mfa-enroll', forced: true });
-    setPhase({ name: 'ready', session, profile: profile as Profile });
+    if (profile.role === 'admin' && aal?.currentLevel !== 'aal2' && !viaBypass) return setPhase({ name: 'mfa-enroll', forced: true });
+    setPhase({ name: 'ready', session, profile: profile as Profile, viaBypass });
   }, [needs]);
 
   useEffect(() => {
@@ -106,7 +110,7 @@ export function AuthGate({ require: needs, title, children }: {
       const me: Me = {
         session: phase.session, userId: phase.session.user.id, profile: phase.profile,
         isEditor: phase.profile.role === 'editor' || phase.profile.role === 'admin',
-        isAdmin: phase.profile.role === 'admin', signOut, refresh: evaluate,
+        isAdmin: phase.profile.role === 'admin', viaBypass: phase.viaBypass, signOut, refresh: evaluate,
       };
       return <MeCtx.Provider value={me}>{children}</MeCtx.Provider>;
     }
@@ -164,6 +168,7 @@ function MfaVerify({ factorId, onDone, onCancel }: { factorId: string; onDone: (
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [useBypass, setUseBypass] = useState(false);
   async function submit(e: Event) {
     e.preventDefault();
     setBusy(true); setError('');
@@ -172,6 +177,7 @@ function MfaVerify({ factorId, onDone, onCancel }: { factorId: string; onDone: (
     await onDone();
     setBusy(false);
   }
+  if (useBypass) return <BypassForm onDone={onDone} onBack={() => setUseBypass(false)} />;
   return (
     <form class="stack" style={{ '--stack': '14px' }} onSubmit={submit}>
       <h1 class="auth-h">Two-factor code</h1>
@@ -179,7 +185,38 @@ function MfaVerify({ factorId, onDone, onCancel }: { factorId: string; onDone: (
       <label class="field"><span class="label">6-digit code</span><CodeInput value={code} onChange={setCode} /></label>
       {error && <div class="notice notice-bad" role="alert"><Icon name="warning" />{error}</div>}
       <button class="btn btn-primary btn-block" disabled={busy || code.length !== 6}>{busy ? 'Checking…' : 'Verify'}</button>
+      <button type="button" class="btn btn-ghost btn-block" onClick={() => setUseBypass(true)}>Can’t use your authenticator? Enter a bypass code</button>
       <button type="button" class="btn btn-ghost btn-block" onClick={onCancel}>Use a different account</button>
+    </form>
+  );
+}
+
+function BypassForm({ onDone, onBack }: { onDone: () => Promise<void>; onBack: () => void }) {
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function submit(e: Event) {
+    e.preventDefault();
+    setBusy(true); setError('');
+    const { data, error: err } = await sessionClient().rpc('redeem_mfa_bypass', { p_code: code });
+    if (err || data !== true) {
+      setBusy(false);
+      setError('That code didn’t work. It may be mistyped, already used or expired — and it stops working after 5 wrong tries. Ask an admin for a new one.');
+      return;
+    }
+    await onDone();
+    setBusy(false);
+  }
+  return (
+    <form class="stack" style={{ '--stack': '14px' }} onSubmit={submit}>
+      <h1 class="auth-h">Bypass code</h1>
+      <p class="muted">An admin can give you a one-time code that skips the authenticator step for this sign-in. Your authenticator keeps working afterwards.</p>
+      <label class="field"><span class="label">10-digit bypass code</span>
+        <input class="input code-input code-input-wide" inputMode="numeric" autocomplete="off" placeholder="123-456-7890" maxLength={12} required
+          value={code} onInput={(e) => setCode(formatBypassCode((e.target as HTMLInputElement).value))} /></label>
+      {error && <div class="notice notice-bad" role="alert"><Icon name="warning" />{error}</div>}
+      <button class="btn btn-primary btn-block" disabled={busy || code.replace(/\D/g, '').length !== 10}>{busy ? 'Checking…' : 'Sign in'}</button>
+      <button type="button" class="btn btn-ghost btn-block" onClick={onBack}>Back to the authenticator code</button>
     </form>
   );
 }
@@ -238,12 +275,22 @@ export function MfaEnroll({ forced = false, onDone, onCancel }: { forced?: boole
   );
 }
 
+/** Friendlier wording for Supabase's own weak-password rejection (it knows about breached passwords too). */
+function weakPasswordMessage(err: { code?: string; message: string; reasons?: string[] }): string {
+  if (err.code !== 'weak_password' && !err.reasons) return err.message;
+  const reasons = err.reasons ?? [];
+  if (reasons.includes('pwned')) return 'That password has appeared in a known data breach, so it isn’t safe to use. Choose a different one.';
+  return `That password doesn’t meet the rules. ${PASSWORD_RULES_SUMMARY}`;
+}
+
 export function ChangePassword({ forced = false, onDone }: { forced?: boolean; onDone?: () => void | Promise<void> }) {
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [ok, setOk] = useState(false);
+  const checks = checkPassword(pw);
+  const strong = checks.every((c) => c.ok);
   async function submit(e: Event) {
     e.preventDefault();
     setError(''); setOk(false);
@@ -280,13 +327,3 @@ export function ChangePassword({ forced = false, onDone }: { forced?: boolean; o
     </form>
   );
 }
-/** Friendlier wording for Supabase's own weak-password rejection (it knows about breached passwords too). */
-function weakPasswordMessage(err: { code?: string; message: string; reasons?: string[] }): string {
-  if (err.code !== 'weak_password' && !err.reasons) return err.message;
-  const reasons = err.reasons ?? [];
-  if (reasons.includes('pwned')) return 'That password has appeared in a known data breach, so it isn’t safe to use. Choose a different one.';
-  return `That password doesn’t meet the rules. ${PASSWORD_RULES_SUMMARY}`;
-}
-
-  const checks = checkPassword(pw);
-  const strong = checks.every((c) => c.ok);

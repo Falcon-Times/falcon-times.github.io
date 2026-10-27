@@ -43,6 +43,12 @@ touch *School News*, even by crafting requests by hand — the database refuses.
 3. **Two-factor for admins.** `effective_role()` only treats someone as an admin if the session's JWT says
    `aal2` (a TOTP code was verified). A stolen admin password is therefore *worthless on its own* — it
    grants no more power than a stranger's. The same check protects the Edge Function.
+   *Bypass codes:* an admin can issue a one-time, 10-digit code (stored only as a bcrypt hash in
+   `private.mfa_bypass_codes`, never exposed by the API) that stands in for the TOTP step. Redeeming it
+   (`redeem_mfa_bypass`, password session required) records the login's `session_id` in
+   `private.mfa_bypass_sessions` for 8 hours, and `effective_role()` accepts that as an alternative to
+   `aal2`. Codes are single-use, bound to one account, die after 5 wrong guesses and replace any earlier
+   code; failures all look identical so guesses reveal nothing. Everything is audited (the digits never are).
    The helper functions behind those policies (`is_staff`, `edits_section`, …) are `SECURITY DEFINER` and
    live in a `private` schema the API does not expose, so they can't be called as `/rest/v1/rpc/…`. The few
    things the browser needs (`cast_vote`, `record_view`, `trending_article_ids`, `is_admin`, `staff_directory`)

@@ -26,7 +26,8 @@ did what.
    Use the toolbar buttons if you don't want to remember these. **Preview** shows how it'll look.
 4. Add a **cover photo** (upload), a **description** of it for readers who can't see it, a
    **caption**, and the **photographer's credit**. Use original, high-resolution photos — never blurry
-   screenshots or stock art. Big photos are shrunk automatically.
+   screenshots or stock art. Big photos are shrunk automatically. Small previews show how the photo is
+   trimmed on a story card and as the lead story — the site shows the middle, so keep the subject centred.
 5. Tick everyone who contributed under **Bylines**. Pick the **section** and **sub-section**, and add a few **tags**.
 6. Watch the **Checklist**, then click **Submit for review**. Your section leader gets it.
 
@@ -64,3 +65,8 @@ Use **Editor notes** at the bottom to chat privately with your editor about the 
 
 **My profile** lets you change your display name, add a photo and write the short bio readers see on your
 writer page.
+
+**Your photo** is shown in a circle. After you pick a file, a window lets you **drag** the photo and **zoom**
+so the circle frames your face, with previews at the three sizes it appears (your profile page, the staff
+list and under stories). Nothing is saved until you press **Use this photo**, then **Save profile**. Pick **Adjust**
+to re-frame the photo you just chose. The same tool is used for photos on the admin **Staff roster**.

@@ -1,10 +1,11 @@
 import { useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { uploadImage } from '@/lib/images';
+import { checkImageFile, uploadBlob, uploadImage } from '@/lib/images';
 import type { Section } from '@/lib/types';
 import { Icon } from '@/ui/Icon';
 import { toastError } from '@/ui/Toast';
 import { useMe } from './auth';
+import { CropModal } from './CropModal';
 
 type Change<T> = (v: T) => void;
 export const newOption = () => ({ id: `o${crypto.randomUUID().slice(0, 8)}`, label: '' });
@@ -103,31 +104,60 @@ export function SectionPicker({ label, value, onChange, sections, hint, class: c
   );
 }
 
-/** Upload-or-paste image control; stores a public URL. */
-export function ImageField({ label, value, onChange, hint, class: cls }: { label: string; value: string | null; onChange: Change<string | null>; hint?: string; class?: string }) {
+/** What an image is used for: portraits are cropped to a circle before upload; covers show how the site will crop them. */
+export type ImageShape = 'portrait' | 'cover';
+
+/** Image upload control; stores a public URL. */
+export function ImageField({ label, value, onChange, hint, class: cls, shape }: {
+  label: string; value: string | null; onChange: Change<string | null>; hint?: string; class?: string; shape?: ImageShape;
+}) {
   const { userId } = useMe();
   const [busy, setBusy] = useState(false);
+  const [cropping, setCropping] = useState<File | null>(null);
+  const [source, setSource] = useState<File | null>(null);   // the file chosen this session, so it can be re-framed
   const input = useRef<HTMLInputElement>(null);
   async function pick(e: Event) {
     const file = (e.target as HTMLInputElement).files?.[0];
+    if (input.current) input.current.value = '';
     if (!file) return;
+    if (shape === 'portrait') {
+      try { checkImageFile(file); setCropping(file); } catch (err) { toastError(err); }
+      return;
+    }
     setBusy(true);
-    try { onChange(await uploadImage(file, userId)); } catch (err) { toastError(err); } finally { setBusy(false); if (input.current) input.current.value = ''; }
+    try { onChange(await uploadImage(file, userId)); } catch (err) { toastError(err); } finally { setBusy(false); }
+  }
+  async function cropped(r: { blob: Blob; ext: string }) {
+    const file = cropping;
+    setBusy(true);
+    try { onChange(await uploadBlob(r.blob, r.ext, userId)); setSource(file); setCropping(null); }
+    catch (err) { toastError(err); } finally { setBusy(false); }
   }
   return (
     <div class={`field ${cls ?? ''}`}>
       <span class="label">{label}</span>
       <div class="image-field">
-        {value ? <img src={value} alt="" /> : <div class="image-empty"><Icon name="image" size={28} strokeWidth={1.5} /></div>}
+        {value ? <img class={shape === 'portrait' ? 'portrait-thumb' : ''} src={value} alt="" /> : <div class={`image-empty ${shape === 'portrait' ? 'portrait-thumb' : ''}`}><Icon name="image" size={28} strokeWidth={1.5} /></div>}
         <div class="stack" style={{ '--stack': '6px' }}>
           <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={pick} />
           <button type="button" class="btn btn-sm" disabled={busy} onClick={() => input.current?.click()}>
             <Icon name={busy ? 'loader' : 'upload'} class={busy ? 'spinner' : ''} size={14} /> {busy ? 'Uploading…' : value ? 'Replace' : 'Upload'}
           </button>
-          {value && <button type="button" class="btn btn-sm btn-ghost" onClick={() => onChange(null)}><Icon name="x" size={14} /> Remove</button>}
+          {shape === 'portrait' && source && <button type="button" class="btn btn-sm" disabled={busy} onClick={() => setCropping(source)}><Icon name="pencil" size={14} /> Adjust</button>}
+          {value && <button type="button" class="btn btn-sm btn-ghost" onClick={() => { onChange(null); setSource(null); }}><Icon name="x" size={14} /> Remove</button>}
         </div>
       </div>
+      {shape === 'cover' && value && (
+        <div class="cover-previews" aria-label="How the photo will be cropped on the site">
+          <figure><div style={{ aspectRatio: '16 / 10' }}><img src={value} alt="" /></div><figcaption class="small muted">Story card</figcaption></figure>
+          <figure><div style={{ aspectRatio: '16 / 9' }}><img src={value} alt="" /></div><figcaption class="small muted">Lead story</figcaption></figure>
+        </div>
+      )}
+      {shape === 'cover' && value && (
+        <p class="hint">The site shows the middle of your photo in these frames, so keep the main subject near the centre.</p>
+      )}
       {hint && <span class="hint">{hint}</span>}
+      {cropping && <CropModal file={cropping} onCancel={() => setCropping(null)} onDone={cropped} />}
     </div>
   );
 }

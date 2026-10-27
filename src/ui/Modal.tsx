@@ -4,6 +4,10 @@ import { Icon } from './Icon';
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
+// Dialogs can open on top of each other (e.g. the photo cropper inside an edit form);
+// only the top one reacts to Esc and Tab.
+const openDialogs: symbol[] = [];
+
 /** Accessible dialog: focus trap, Esc to close, scroll lock, focus restore. */
 export function Modal({ title, onClose, children, footer, width = 560 }: {
   title: string; onClose: () => void; children: ComponentChildren; footer?: ComponentChildren; width?: number;
@@ -11,12 +15,15 @@ export function Modal({ title, onClose, children, footer, width = 560 }: {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const id = Symbol('dialog');
+    openDialogs.push(id);
     const previous = document.activeElement as HTMLElement | null;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const first = ref.current?.querySelector<HTMLElement>('input,textarea,select') ?? ref.current?.querySelector<HTMLElement>(FOCUSABLE);
     first?.focus();
     const onKey = (e: KeyboardEvent) => {
+      if (openDialogs[openDialogs.length - 1] !== id) return;
       if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
       if (e.key !== 'Tab' || !ref.current) return;
       const items = [...ref.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null);
@@ -28,6 +35,7 @@ export function Modal({ title, onClose, children, footer, width = 560 }: {
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
+      openDialogs.splice(openDialogs.indexOf(id), 1);
       document.body.style.overflow = prevOverflow;
       previous?.focus?.();
     };

@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { TOTP, db, seedAdmin, signIn } from './helpers';
+import { TOTP, db, seedAdmin, signIn, twoTonePng } from './helpers';
 
 // One scripted "week in the newsroom". Tests share state, so they run in order.
 test.describe.configure({ mode: 'serial' });
@@ -193,6 +193,68 @@ test('writer: forced password change, drafts and submits a story', async ({ brow
   await page.context().close();
 });
 
+test('a portrait is framed with live previews before anything is uploaded', async ({ browser }) => {
+  const page = await newPage(browser);
+  await signIn(page, '/newsroom/#/profile', WRITER.email, WRITER.password);
+  await expect(page.getByRole('heading', { name: 'My profile' })).toBeVisible();
+  let uploads = 0;
+  page.on('request', (r) => { if (r.method() === 'POST' && r.url().includes('/storage/v1/')) uploads++; });
+
+  // A wide photo: red on the left, blue on the right. The circle starts centred on the middle.
+  await page.locator('input[type=file]').setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: twoTonePng() });
+  const dialog = page.getByRole('dialog', { name: 'Position your photo' });
+  await expect(dialog).toBeVisible();
+  for (const size of [112, 52, 48]) await expect(dialog.getByTestId(`crop-preview-${size}`)).toBeVisible();
+  expect(uploads).toBe(0); // choosing a file only opens the cropper
+  const previewImg = dialog.getByTestId('crop-preview-112').locator('img');
+  await expect(previewImg).toHaveCSS('left', /^-56px$/);    // centred: the middle 300px of the 600px photo, scaled to a 112px circle
+  await expect(dialog.getByText('may look soft')).toHaveCount(0); // 300px of photo is plenty
+
+  // Drag the photo to the left until only the blue half remains; the previews follow.
+  const frame = dialog.getByRole('group', { name: /Photo position/ });
+  const box = (await frame.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 - 400, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(previewImg).toHaveCSS('left', /^-112px$/);
+  // Zooming in shows a smaller area, which can look soft: the dialog says so.
+  await dialog.getByLabel('Zoom').fill('4');
+  await expect(dialog.getByText('may look soft')).toBeVisible();
+  await dialog.getByLabel('Zoom').fill('1');
+  await expect(dialog.getByText('may look soft')).toHaveCount(0);
+
+  await dialog.getByRole('button', { name: 'Use this photo' }).click();
+  await expect(dialog).toBeHidden();
+  expect(uploads).toBe(1);
+  await expect(page.getByRole('button', { name: 'Adjust' })).toBeVisible();
+  await page.getByRole('button', { name: 'Save profile' }).click();
+  await expect(page.getByText('Profile saved')).toBeVisible();
+
+  // What was saved is the square the person framed — all blue — not the whole photo.
+  const c = db(); await c.connect();
+  const { rows: [row] } = await c.query(
+    'select s.photo_url from public.staff_members s join public.profiles p on p.staff_member_id = s.id where p.email = $1', [WRITER.email]);
+  await c.end();
+  const px = await page.evaluate(async (url: string) => {
+    const img = new Image(); img.crossOrigin = 'anonymous'; img.src = url; await img.decode();
+    const canvas = document.createElement('canvas'); canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+    const g = canvas.getContext('2d')!; g.drawImage(img, 0, 0);
+    const at = (x: number, y: number) => [...g.getImageData(x, y, 1, 1).data];
+    return { w: img.naturalWidth, h: img.naturalHeight, left: at(5, img.naturalHeight / 2), right: at(img.naturalWidth - 6, img.naturalHeight / 2) };
+  }, row.photo_url);
+  expect(px.w).toBe(px.h);
+  expect(px.left[2]).toBeGreaterThan(180); expect(px.left[0]).toBeLessThan(80);   // blue, even at the left edge
+  expect(px.right[2]).toBeGreaterThan(180);
+
+  // The public staff page shows it as the round portrait.
+  const reader = await newPage(browser);
+  await reader.goto('/#/staff');
+  await expect(reader.locator(`img.avatar[src="${row.photo_url}"]`).first()).toBeVisible();
+  await reader.context().close();
+  await page.context().close();
+});
+
 test('section leader reviews, publishes and later updates the story', async ({ browser }) => {
   const page = await newPage(browser);
   await signIn(page, '/newsroom/', EDITOR.email, EDITOR.temp);
@@ -372,6 +434,20 @@ test('each account action says what it does, and admins see why they can\'t use 
   }
   await expect(dialog.getByText('ask another admin')).toBeVisible();
   await dialog.getByRole('button', { name: 'Cancel' }).click();
+});
+
+test('Esc closes only the photo cropper when it is open inside another dialog', async () => {
+  await admin.goto('/admin/#/staff');
+  await expect(admin.getByRole('heading', { name: 'Staff roster' })).toBeVisible();
+  await admin.getByRole('button', { name: /New staff member/ }).click();
+  const edit = admin.getByRole('dialog').first();
+  await edit.locator('input[type=file]').setInputFiles({ name: 'p.png', mimeType: 'image/png', buffer: twoTonePng() });
+  await expect(admin.getByRole('dialog', { name: 'Position your photo' })).toBeVisible();
+  await admin.keyboard.press('Escape');
+  await expect(admin.getByRole('dialog', { name: 'Position your photo' })).toHaveCount(0);
+  await expect(edit).toBeVisible(); // the form underneath is still open
+  await admin.keyboard.press('Escape');
+  await expect(admin.getByRole('dialog')).toHaveCount(0);
 });
 
 test('admin can disable an account, which blocks sign-in', async ({ browser }) => {

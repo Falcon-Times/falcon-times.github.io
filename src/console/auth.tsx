@@ -152,7 +152,7 @@ function LoginForm({ onDone }: { onDone: () => Promise<void> }) {
         <input class="input" type="password" autocomplete="current-password" required value={password} onInput={(e) => setPassword((e.target as HTMLInputElement).value)} /></label>
       {error && <div class="notice notice-bad" role="alert"><Icon name="warning" />{error}</div>}
       <button class="btn btn-primary btn-block" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-      <p class="small muted">Accounts are created by an admin. Forgot your password? Ask them for a new temporary one.</p>
+      <p class="small muted">Accounts are created by an admin. Forgot your password? Ask an admin to reset it — they’ll give you a temporary password to sign in with once, and you’ll choose a new one right away.</p>
     </form>
   );
 }

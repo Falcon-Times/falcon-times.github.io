@@ -126,3 +126,9 @@ a.stat:hover { transform: translateY(-2px); text-decoration: none; }
 .tip-row:hover { border-color: var(--navy-600); transform: translateY(-1px); }
 .tip-message { margin: 0; padding: 14px 18px; border-left: 4px solid var(--gold); background: var(--surface-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; white-space: pre-wrap; word-break: break-word; font-family: var(--font-text); font-size: 1.05rem; }
 .console-bar .btn { white-space: nowrap; }
+
+/* Account actions: a button with one line saying what it does */
+.action-row { display: grid; grid-template-columns: minmax(170px, 215px) 1fr; gap: 6px 14px; align-items: center; }
+.action-row .btn { justify-self: start; }
+.action-row p { margin: 0; }
+@media (max-width: 600px) { .action-row { grid-template-columns: 1fr; } }

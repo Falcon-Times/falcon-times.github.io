@@ -100,7 +100,7 @@ function CredentialModal({ email, password, onClose }: { email: string; password
   return (
     <Modal title="Temporary password" onClose={onClose} footer={<button class="btn btn-primary" onClick={onClose}>I’ve shared it</button>}>
       <div class="stack" style={{ '--stack': '12px' }}>
-        <div class="notice notice-warn"><Icon name="warning" /><div>This is the only time the password is shown. Share it with <strong>{email}</strong> in person or over a private message — not in a group chat. They’ll be asked to choose their own at first sign-in.</div></div>
+        <div class="notice notice-warn"><Icon name="warning" /><div>This is the only time the password is shown. Share it with <strong>{email}</strong> in person or over a private message — not in a group chat. It is a one-time sign-in password that replaces whatever they had before: they use it once, then choose their own straight away. Their two-factor setup is not affected.</div></div>
         <div class="secret-box"><code>{password}</code><button class="btn btn-sm" onClick={() => { navigator.clipboard.writeText(password); toast('Copied', 'ok'); }}><Icon name="copy" size={14} /> Copy</button></div>
         <p class="small muted">Sign-in address: <code>{location.origin}/newsroom/</code></p>
       </div>
@@ -189,11 +189,11 @@ function EditModal({ person, isSelf, lastAdmin, bypass, onClose, onSaved, onCred
     if (active !== person.active) await adminUsers({ action: 'set_active', user_id: person.id, active });
   }, 'Saved'); };
   const resetPw = () => {
-    if (!confirm(`Set a new temporary password for ${person.email}? Their current password stops working immediately.`)) return;
+    if (!confirm(`Reset the password for ${person.email}? Their current password stops working immediately; they’ll sign in with a temporary one and then choose their own. Their two-factor setup is not affected.`)) return;
     const password = tempPassword();
     return run(async () => { await adminUsers({ action: 'reset_password', user_id: person.id, password }); onCredential({ email: person.email, password }); }, 'Password reset');
   };
-  const resetMfa = () => confirm(`Remove ${person.email}’s two-factor device? They’ll set up a new one at next sign-in.`) &&
+  const resetMfa = () => confirm(`Remove ${person.email}’s two-factor device? Their password is unchanged, and they’ll set up a new authenticator at next sign-in. (For a one-off lockout, a bypass code is gentler.)`) &&
     run(() => adminUsers({ action: 'reset_mfa', user_id: person.id }), 'Two-factor reset');
   const makeBypass = () => run(async () => {
     const minutes = Number(lifespan);
@@ -222,32 +222,36 @@ function EditModal({ person, isSelf, lastAdmin, bypass, onClose, onSaved, onCred
       <hr class="rule" />
       <div class="stack" style={{ '--stack': '10px' }}>
         <h3 class="h3">Account actions</h3>
-        <div class="row">
-          <button class="btn" disabled={busy || isSelf} onClick={resetPw}><Icon name="key" size={15} /> New temporary password</button>
+        <div class="action-row">
+          <button class="btn" disabled={busy || isSelf} onClick={resetPw}><Icon name="key" size={15} /> Reset password</button>
+          <p class="small muted">Forgot their password? Replaces it with a one-time temporary password for you to hand over; they choose their own at next sign-in. Doesn’t touch two-factor.</p>
+        </div>
+        <div class="action-row">
           <button class="btn" disabled={busy || isSelf} onClick={resetMfa}><Icon name="shield" size={15} /> Reset two-factor</button>
+          <p class="small muted">Lost their authenticator for good? Removes it so they can set up a new one. Keeps their password. For a one-off lockout, use a bypass code below instead.</p>
+        </div>
+        <div class="action-row">
           <button class="btn btn-danger" disabled={busy || isSelf || lastAdmin} onClick={remove}><Icon name="trash" size={15} /> Delete account</button>
+          <p class="small muted">Removes the login permanently. Their stories stay on the site. Disabling the account (above) is usually better.</p>
         </div>
         {isSelf && <p class="small muted">Manage your own password and two-factor under “Account security”.</p>}
       </div>
-      {!isSelf && (
-        <>
-          <hr class="rule" />
-          <div class="stack" style={{ '--stack': '10px' }}>
-            <h3 class="h3">Two-factor bypass code</h3>
-            <p class="small muted">Lost their phone, or left it at home? Give them a one-time code to get past the authenticator step — no need to turn two-factor off. It works once, only for {person.display_name || 'this person'}, and they still need their password.</p>
-            {bypass && (
-              <div class={`notice ${bypass.failed_attempts >= 5 ? 'notice-bad' : ''}`}><Icon name="key" /><div class="spread grow">
-                <span>{bypass.failed_attempts >= 5 ? 'The outstanding code was locked after 5 wrong tries.' : `A code is outstanding until ${new Date(bypass.expires_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`} Making a new one replaces it.</span>
-                <button class="btn btn-sm" disabled={busy} onClick={cancelBypass}>Revoke</button>
-              </div></div>
-            )}
-            <div class="row" style={{ 'align-items': 'flex-end' }}>
-              <SelectField label="Valid for" value={lifespan} onChange={setLifespan} options={BYPASS_WINDOWS} />
-              <button class="btn" disabled={busy || !person.active} onClick={makeBypass}><Icon name="key" size={15} /> Create bypass code</button>
-            </div>
-          </div>
-        </>
-      )}
+      <hr class="rule" />
+      <div class="stack" style={{ '--stack': '10px' }}>
+        <h3 class="h3">Two-factor bypass code</h3>
+        <p class="small muted">Forgot their phone today? Give them a one-time code that gets them past the authenticator step for one sign-in. Their password and authenticator both stay as they are. It works once, only for {person.display_name || 'this person'}, and they still need their password.</p>
+        {isSelf && <p class="small muted">You can’t make one for yourself — ask another admin.</p>}
+        {bypass && (
+          <div class={`notice ${bypass.failed_attempts >= 5 ? 'notice-bad' : ''}`}><Icon name="key" /><div class="spread grow">
+            <span>{bypass.failed_attempts >= 5 ? 'The outstanding code was locked after 5 wrong tries.' : `A code is outstanding until ${new Date(bypass.expires_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`} Making a new one replaces it.</span>
+            <button class="btn btn-sm" disabled={busy} onClick={cancelBypass}>Revoke</button>
+          </div></div>
+        )}
+        <div class="row" style={{ 'align-items': 'flex-end' }}>
+          <SelectField label="Valid for" value={lifespan} onChange={setLifespan} options={BYPASS_WINDOWS} disabled={isSelf} />
+          <button class="btn" disabled={busy || isSelf || !person.active} onClick={makeBypass}><Icon name="key" size={15} /> Create bypass code</button>
+        </div>
+      </div>
     </Modal>
   );
 }

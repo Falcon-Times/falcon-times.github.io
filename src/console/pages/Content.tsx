@@ -171,7 +171,7 @@ export function StaffRoster() {
       { key: 'sections', label: 'Teams', type: 'sections', includeHidden: true },
       { key: 'lead_of', label: 'Leads (★)', type: 'sections', includeHidden: true, hint: 'Check the teams this person leads.' },
       { key: 'bio', label: 'Bio', type: 'textarea', max: 2000 },
-      { key: 'photo_url', label: 'Photo', type: 'image' },
+      { key: 'photo_url', label: 'Photo', type: 'image', imageShape: 'portrait' },
       { key: 'sort_order', label: 'Order', type: 'number', hint: 'Lower numbers first within a team.' },
       { key: 'active', label: 'Listed on the site', type: 'bool' },
     ],

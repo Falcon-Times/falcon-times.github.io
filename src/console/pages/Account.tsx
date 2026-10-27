@@ -42,7 +42,7 @@ export function Profile() {
           <>
             <hr class="rule" />
             <p class="muted small">This is your public profile on the “Meet the newsroom” page.</p>
-            <ImageField label="Photo" value={photo} onChange={setPhoto} hint="Optional. A friendly, well-lit portrait works best." />
+            <ImageField label="Photo" shape="portrait" value={photo} onChange={setPhoto} hint="Optional. A friendly, well-lit portrait works best. You’ll choose what shows in the circle after picking a file." />
             <TextArea label="Public bio" value={bio} onChange={setBio} max={2000} rows={5} hint="A few sentences about you and what you cover." />
           </>
         ) : (

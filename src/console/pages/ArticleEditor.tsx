@@ -244,7 +244,7 @@ export function ArticleEditor({ id }: { id: string | null }) {
 
           <section class="side-box stack" style={{ '--stack': '10px' }}>
             <h2 class="side-h">Cover photo</h2>
-            <ImageField label="Photo" value={form.cover_image_url} onChange={(v) => set('cover_image_url', v)} hint="Use original, high-resolution photos (we resize big ones automatically)." />
+            <ImageField label="Photo" shape="cover" value={form.cover_image_url} onChange={(v) => set('cover_image_url', v)} hint="Use original, high-resolution photos (we resize big ones automatically)." />
             <TextField label="Description (alt text)" value={form.image_alt} max={300} onChange={(v) => set('image_alt', v)} hint="Describe the photo for readers who can’t see it." />
             <TextField label="Caption" value={form.image_caption} max={500} onChange={(v) => set('image_caption', v)} />
             <TextField label="Photo credit" value={form.photo_credit} max={200} onChange={(v) => set('photo_credit', v)} placeholder="Photographer’s name" />

@@ -7,7 +7,7 @@ import { Empty, ErrorNote, Loading } from '@/ui/States';
 import { toast, toastError } from '@/ui/Toast';
 import { deleteRow, listRows, upsertRow } from './api';
 import {
-  Checkbox, ImageField, NumberField, OptionsField, SectionPicker, SelectField, TagsField, TextArea, TextField,
+  Checkbox, ImageField, type ImageShape, NumberField, OptionsField, SectionPicker, SelectField, TagsField, TextArea, TextField,
 } from './fields';
 import { useRefs } from './refs';
 
@@ -27,6 +27,8 @@ export interface FieldDef<T> {
   showIf?: (row: Record<string, unknown>) => boolean;
   /** Only editable while creating (e.g. a URL slug). */
   createOnly?: boolean;
+  /** For image fields: crop as a portrait, or preview as a cover photo. */
+  imageShape?: ImageShape;
   /** Which sections to offer (defaults to the public ones). */
   includeHidden?: boolean;
 }
@@ -173,7 +175,7 @@ function RecordModal<T extends { id?: string }>({ config, state, onClose, onSave
             case 'options':
               return <OptionsField key={f.key} class={cls} label={f.label} value={(v as { id: string; label: string }[]) ?? []} hint={f.hint} onChange={(x) => set(f.key, x)} />;
             case 'image':
-              return <ImageField key={f.key} class={cls} label={f.label} value={(v as string | null) ?? null} hint={f.hint} onChange={(x) => set(f.key, x)} />;
+              return <ImageField key={f.key} class={cls} label={f.label} shape={f.imageShape} value={(v as string | null) ?? null} hint={f.hint} onChange={(x) => set(f.key, x)} />;
           }
         })}
       </form>

@@ -418,6 +418,52 @@ test('an unused bypass code can be revoked', async ({ browser }) => {
   await page.context().close();
 });
 
+test('a super admin is labelled, and can create admin accounts', async () => {
+  await admin.goto('/admin/#/people');
+  await expect(admin.locator('.who .badge')).toHaveText('Super admin');
+  await expect(admin.getByRole('row', { name: new RegExp(ADMIN.email) }).getByText('Super admin', { exact: true })).toBeVisible();
+  await admin.getByRole('button', { name: 'Add account' }).click();
+  const roles = await admin.getByRole('dialog').getByLabel('Role').locator('option').allTextContents();
+  expect(roles).toEqual(['Writer', 'Section leader', 'Admin', 'Super admin']);
+  await admin.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+});
+
+test('a plain admin runs the site but cannot manage admin accounts — in the screens or on the server', async ({ browser }) => {
+  const page = await newPage(browser);
+  await signIn(page, '/admin/', ADMIN2.email, ADMIN2.password);
+  await page.getByLabel('6-digit code').fill(TOTP);
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page.locator('.who .badge')).toHaveText('Admin');
+  await page.goto('/admin/#/people');
+
+  // Admin-level accounts can't be opened by a plain admin; people they run can.
+  await expect(page.getByRole('row', { name: new RegExp(ADMIN.email) }).getByRole('button', { name: /Manage/ })).toBeDisabled();
+  await expect(page.getByRole('row', { name: new RegExp(WRITER.email) }).getByRole('button', { name: /Manage/ })).toBeEnabled();
+  await page.getByRole('button', { name: 'Add account' }).click();
+  const options = await page.getByRole('dialog').getByLabel('Role').locator('option').allTextContents();
+  expect(options).toEqual(['Writer', 'Section leader']);
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+
+  // The server says no too, even to a hand-made request with a valid admin session.
+  const c = db(); await c.connect();
+  const { rows: [target] } = await c.query('select id from public.profiles where email = $1', [ADMIN.email]);
+  await c.end();
+  const answers = await page.evaluate(async ({ id, base }: { id: string; base: string }) => {
+    const stored = Object.entries(localStorage).map(([, v]) => { try { return JSON.parse(v); } catch { return null; } }).find((v) => v?.access_token);
+    const anon = await (await fetch(`${base}/__test/anon-key`)).text();
+    const headers = { Authorization: `Bearer ${stored.access_token}`, apikey: anon, 'Content-Type': 'application/json' };
+    const fn = await fetch(`${base}/functions/v1/admin-users`, { method: 'POST', headers, body: JSON.stringify({ action: 'reset_password', user_id: id, password: 'Sup3rSecretPassw0rd' }) });
+    const make = await fetch(`${base}/functions/v1/admin-users`, { method: 'POST', headers, body: JSON.stringify({ action: 'create', email: 'sneaky@example.test', password: 'Sup3rSecretPassw0rd', role: 'super_admin', display_name: 'Sneaky' }) });
+    const patch = await fetch(`${base}/rest/v1/profiles?id=eq.${id}`, { method: 'PATCH', headers: { ...headers, Prefer: 'return=representation' }, body: JSON.stringify({ active: false }) });
+    return { fn: [fn.status, (await fn.json()).error], make: [make.status, (await make.json()).error], patch: [patch.status, (await patch.json()).message] };
+  }, { id: target.id, base: 'http://127.0.0.1:54330' });
+  expect(answers.fn).toEqual([403, 'Only super admins can manage admin accounts.']);
+  expect(answers.make).toEqual([403, 'Only super admins can create admin accounts.']);
+  expect(answers.patch[0]).toBe(403);
+  expect(answers.patch[1]).toMatch(/Only super admins/);
+  await page.context().close();
+});
+
 test('each account action says what it does, and admins see why they can\'t use them on themselves', async () => {
   await admin.goto('/admin/#/people');
   await admin.getByRole('row', { name: new RegExp(ADMIN.email) }).getByRole('button', { name: /Manage/ }).click();

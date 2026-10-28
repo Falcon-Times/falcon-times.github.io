@@ -78,18 +78,25 @@ Supabase CLI: `supabase functions deploy admin-users --no-verify-jwt --project-r
 Then merge to `main` (or run **Actions → "Deploy site" → Run workflow**). The site appears at
 <https://falcon-times.github.io> within a couple of minutes.
 
-## 6. Create the first admin (you)
+## 6. Create the first super admin (you)
 
 1. Supabase dashboard → **Authentication → Users → Add user → Create new user**.
    Enter your email and a strong password, and tick **Auto Confirm User**.
 2. **SQL Editor** → run (with your real email and name):
 
    ```sql
-   select public.bootstrap_admin('you@example.com', 'Your Name');
+   select public.bootstrap_super_admin('you@example.com', 'Your Name');
    ```
 3. Open `https://falcon-times.github.io/admin/`, sign in, and follow the prompt to scan a QR code
    with an authenticator app (Google Authenticator, Authy, 1Password…). Admin access only works
    after this second step.
+
+> **Super admin vs admin.** Like Google Workspace, a **super admin** can do everything an **admin** can *and* is the
+> only one who can create, promote, demote, disable, delete or reset admin-level accounts (admins and other super
+> admins). Admins run the site day to day — content, settings, writers and section leaders — but can't change who
+> the admins are. Keep two super admins if you can; the last one can't be removed. (Sites set up before this role
+> existed: the first admin ever created was promoted automatically — check **People & access**. To promote
+> someone else from the SQL editor: `select public.bootstrap_super_admin('them@example.com');`.)
 
 > **Lost your authenticator?** In the Supabase dashboard go to *Authentication → Users*, open your
 > user and delete the MFA factor; you'll be asked to enrol a new one at next sign-in. Keep a second
@@ -103,7 +110,8 @@ In the admin panel → **People & access → Add account**.
 | --- | --- | --- |
 | Section leaders (School News, Sports, Opinion + Advice, Culture + Entertainment, Social Media, Photography + Video) | **Section leader** | their own section |
 | Reporters, photographers, designers | **Writer** | the section(s) they write for |
-| Trusted site administrators | **Admin** | (all) |
+| Trusted site administrators | **Admin** (only a super admin can create these) | (all) |
+| Whoever owns the site's accounts (a teacher/advisor, a second owner) | **Super admin** | (all) |
 
 * Each person gets **their own login**. The system generates a one-time temporary password that you
   hand over in person; they must choose their own at first sign-in.

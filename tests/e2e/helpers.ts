@@ -12,12 +12,13 @@ export function db() {
   });
 }
 
+/** Creates the site's first account: a super admin (the role that can manage other admins). */
 export async function seedAdmin(email: string, password: string) {
   const r = await fetch(`${HARNESS}/__test/users`, { method: 'POST', body: JSON.stringify({ email, password, meta: {} }) });
   if (!r.ok) throw new Error(`seed failed: ${await r.text()}`);
   const client = db();
   await client.connect();
-  await client.query('select public.bootstrap_admin($1, $2)', [email, 'Test Admin']);
+  await client.query('select public.bootstrap_super_admin($1, $2)', [email, 'Test Admin']);
   await client.end();
 }
 

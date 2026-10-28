@@ -5,7 +5,7 @@ import type { Session } from '@supabase/supabase-js';
 import { isConfigured } from '@/lib/config';
 import { checkPassword, PASSWORD_RULES_SUMMARY } from '@/lib/passwordPolicy';
 import { sessionClient } from '@/lib/supabase';
-import type { Profile } from '@/lib/types';
+import { isAdminRole, type Profile } from '@/lib/types';
 import { Icon } from '@/ui/Icon';
 import { Logo } from '@/ui/Logo';
 import { Loading } from '@/ui/States';
@@ -18,7 +18,8 @@ export interface Me {
   userId: string;
   profile: Profile;
   isEditor: boolean;     // section leader or admin
-  isAdmin: boolean;
+  isAdmin: boolean;      // admin or super admin
+  isSuperAdmin: boolean; // may manage admin-level accounts
   viaBypass: boolean;    // signed in with a 2FA bypass code instead of an authenticator code
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -64,11 +65,11 @@ export function AuthGate({ require: needs, title, children }: {
     if (!profile || !profile.active) {
       return setPhase({ name: 'no-access', reason: 'Your account has not been given access to the newsroom yet. Ask an admin to set up your profile.' });
     }
-    if (needs === 'admin' && profile.role !== 'admin') {
+    if (needs === 'admin' && !isAdminRole(profile.role)) {
       return setPhase({ name: 'no-access', reason: 'This area is for site admins only.' });
     }
     if (session.user.user_metadata?.must_change_password) return setPhase({ name: 'password' });
-    if (profile.role === 'admin' && aal?.currentLevel !== 'aal2' && !viaBypass) return setPhase({ name: 'mfa-enroll', forced: true });
+    if (isAdminRole(profile.role) && aal?.currentLevel !== 'aal2' && !viaBypass) return setPhase({ name: 'mfa-enroll', forced: true });
     setPhase({ name: 'ready', session, profile: profile as Profile, viaBypass });
   }, [needs]);
 
@@ -109,8 +110,8 @@ export function AuthGate({ require: needs, title, children }: {
     case 'ready': {
       const me: Me = {
         session: phase.session, userId: phase.session.user.id, profile: phase.profile,
-        isEditor: phase.profile.role === 'editor' || phase.profile.role === 'admin',
-        isAdmin: phase.profile.role === 'admin', viaBypass: phase.viaBypass, signOut, refresh: evaluate,
+        isEditor: phase.profile.role === 'editor' || isAdminRole(phase.profile.role),
+        isAdmin: isAdminRole(phase.profile.role), isSuperAdmin: phase.profile.role === 'super_admin', viaBypass: phase.viaBypass, signOut, refresh: evaluate,
       };
       return <MeCtx.Provider value={me}>{children}</MeCtx.Provider>;
     }

@@ -14,19 +14,21 @@ decides what each request may do**.
 
 ## Who can do what
 
-Roles live in `public.profiles`. Only an admin (or the `admin-users` function) can change them.
+Roles live in `public.profiles`: writer < section leader < admin < **super admin**. Only an admin (or the
+`admin-users` function) can change them, and only a super admin can touch admin-level accounts (below).
 
-| | Reader | Writer | Section leader | Admin |
-| --- | :-: | :-: | :-: | :-: |
-| Read published stories, polls, scores | ✅ | ✅ | ✅ | ✅ |
-| Vote in a poll / send a tip | ✅ | ✅ | ✅ | ✅ |
-| Draft & submit stories in their sections | | ✅ | ✅ | ✅ (any) |
-| Edit a story after it's published | | | ✅ own sections | ✅ |
-| Publish, schedule, unpublish, feature, set the lead story | | | ✅ own sections | ✅ |
-| Read & triage tips | | | ✅ own sections + general | ✅ all |
-| Scoreboard (sports leader), polls, announcements, quotes | | | ✅ | ✅ |
-| Edit own bio/photo | | ✅ | ✅ | ✅ |
-| Accounts, staff roster, sections, settings, activity log | | | | ✅ **(needs 2FA)** |
+| | Reader | Writer | Section leader | Admin | Super admin |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| Read published stories, polls, scores | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Vote in a poll / send a tip | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Draft & submit stories in their sections | | ✅ | ✅ | ✅ (any) | ✅ |
+| Edit a story after it's published | | | ✅ own sections | ✅ | ✅ |
+| Publish, schedule, unpublish, feature, set the lead story | | | ✅ own sections | ✅ | ✅ |
+| Read & triage tips | | | ✅ own sections + general | ✅ all | ✅ |
+| Scoreboard (sports leader), polls, announcements, quotes | | | ✅ | ✅ | ✅ |
+| Edit own bio/photo | | ✅ | ✅ | ✅ | ✅ |
+| Staff roster, sections, settings, activity log; accounts of writers & section leaders | | | | ✅ **(needs 2FA)** | ✅ |
+| Create, change, disable, delete or reset **admin and super admin** accounts (and their bypass codes) | | | | | ✅ **(needs 2FA)** |
 
 A "section" is assigned to each person by an admin (`profiles.sections`). A writer for *Sports* cannot
 touch *School News*, even by crafting requests by hand — the database refuses.
@@ -43,6 +45,10 @@ touch *School News*, even by crafting requests by hand — the database refuses.
 3. **Two-factor for admins.** `effective_role()` only treats someone as an admin if the session's JWT says
    `aal2` (a TOTP code was verified). A stolen admin password is therefore *worthless on its own* — it
    grants no more power than a stranger's. The same check protects the Edge Function.
+   *Super admins:* the guard trigger on `profiles` (and the same checks in the `admin-users` function) lets only super
+   admins create, promote, demote, disable, delete or reset admin-level accounts or issue bypass codes for them; plain
+   admins can't even rename another admin. A plain admin can't change their own role either, and the last active
+   admin-level account and the last active super admin can never be removed. Super admins need 2FA like admins.
    *Bypass codes:* an admin can issue a one-time, 10-digit code (stored only as a bcrypt hash in
    `private.mfa_bypass_codes`, never exposed by the API) that stands in for the TOTP step. Redeeming it
    (`redeem_mfa_bypass`, password session required) records the login's `session_id` in

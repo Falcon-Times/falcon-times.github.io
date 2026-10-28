@@ -81,7 +81,7 @@ function TipModal({ tip, onClose, onSaved }: { tip: Tip; onClose: () => void; on
   const [assigned, setAssigned] = useState(tip.assigned_to ?? '');
   const [notes, setNotes] = useState(tip.internal_notes);
   const [busy, setBusy] = useState(false);
-  const editors = directory.filter((d) => d.active && (d.role === 'editor' || d.role === 'admin'));
+  const editors = directory.filter((d) => d.active && (d.role === 'editor' || d.role === 'admin' || d.role === 'super_admin'));
 
   async function save() {
     setBusy(true);

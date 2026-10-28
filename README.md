@@ -11,7 +11,7 @@ accounts (and two-factor sign-in for admins).
 | --- | --- | --- |
 | The newspaper | `/` | everyone |
 | Newsroom (write, review, tip line, polls, scoreboard) | `/newsroom/` | writers & section leaders |
-| Admin (accounts, staff roster, sections, settings, activity log) | `/admin/` | admins only |
+| Admin (accounts, staff roster, sections, settings, activity log) | `/admin/` | admins and super admins |
 
 ## How it works
 

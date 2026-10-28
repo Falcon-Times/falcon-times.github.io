@@ -26,7 +26,8 @@ class HttpError extends Error {
   }
 }
 
-const ROLES = ['writer', 'editor', 'admin'];
+const ROLES = ['writer', 'editor', 'admin', 'super_admin'];
+const ADMIN_LEVEL = ['admin', 'super_admin'];   // only super admins may manage these accounts
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -55,6 +56,8 @@ Deno.serve(async (req: Request) => {
     if (adminErr || isAdmin !== true) {
       throw new HttpError(403, 'Only admins who have signed in with two-factor can do this.');
     }
+    const { data: isSuper } = await caller.rpc('is_super_admin');
+    const callerIsSuper = isSuper === true;
     const { data: who } = await caller.auth.getUser(token);
     const callerId = who.user?.id;
     if (!callerId) throw new HttpError(401, 'Please sign in again.');
@@ -72,10 +75,28 @@ Deno.serve(async (req: Request) => {
       if (typeof body.user_id !== 'string' || !UUID.test(body.user_id)) throw new HttpError(400, 'Missing user.');
       return body.user_id;
     };
-    const activeAdmins = async (excluding: string) => {
+    const activeWithRole = async (roles: string[], excluding: string) => {
       const { count } = await admin.from('profiles').select('id', { count: 'exact', head: true })
-        .eq('role', 'admin').eq('active', true).neq('id', excluding);
+        .in('role', roles).eq('active', true).neq('id', excluding);
       return count ?? 0;
+    };
+    /** Load the account being acted on, and refuse unless the caller may manage it. */
+    const manageable = async (id: string) => {
+      const { data: target } = await admin.from('profiles').select('role,email').eq('id', id).maybeSingle();
+      if (target && ADMIN_LEVEL.includes(target.role) && !callerIsSuper) {
+        throw new HttpError(403, 'Only super admins can manage admin accounts.');
+      }
+      return target;
+    };
+    /** Don't let the last admin-level account, or the last super admin, disappear. */
+    const keepAdmins = async (id: string, target: { role: string } | null) => {
+      if (!target) return;
+      if (ADMIN_LEVEL.includes(target.role) && (await activeWithRole(ADMIN_LEVEL, id)) === 0) {
+        throw new HttpError(400, 'At least one active admin must remain.');
+      }
+      if (target.role === 'super_admin' && (await activeWithRole(['super_admin'], id)) === 0) {
+        throw new HttpError(400, 'At least one active super admin must remain.');
+      }
     };
 
     switch (body.action) {
@@ -113,6 +134,7 @@ Deno.serve(async (req: Request) => {
         if (!EMAIL.test(email)) throw new HttpError(400, 'Enter a valid email address.');
         if (!isStrongPassword(password)) throw new HttpError(400, `That temporary password breaks the password rules. ${PASSWORD_RULES_SUMMARY}`);
         if (!ROLES.includes(role)) throw new HttpError(400, 'Unknown role.');
+        if (ADMIN_LEVEL.includes(role) && !callerIsSuper) throw new HttpError(403, 'Only super admins can create admin accounts.');
         if (!name) throw new HttpError(400, 'Enter a display name.');
 
         const { data, error } = await admin.auth.admin.createUser({
@@ -123,7 +145,7 @@ Deno.serve(async (req: Request) => {
           throw new HttpError(400, /already|registered|exists/i.test(error?.message ?? '') ? 'An account with that email already exists.' : (error?.message ?? 'Could not create the account.'));
         }
         const { error: pErr } = await admin.from('profiles').insert({
-          id: data.user.id, email, display_name: name, role, sections: role === 'admin' ? [] : sections,
+          id: data.user.id, email, display_name: name, role, sections: ADMIN_LEVEL.includes(role) ? [] : sections,
           staff_member_id: staffId, active: true,
         });
         if (pErr) {
@@ -136,6 +158,7 @@ Deno.serve(async (req: Request) => {
 
       case 'reset_password': {
         const id = needUser();
+        await manageable(id);
         const password = String(body.password ?? '');
         if (!isStrongPassword(password)) throw new HttpError(400, `That temporary password breaks the password rules. ${PASSWORD_RULES_SUMMARY}`);
         const { data: existing, error: gErr } = await admin.auth.admin.getUserById(id);
@@ -150,6 +173,7 @@ Deno.serve(async (req: Request) => {
 
       case 'reset_mfa': {
         const id = needUser();
+        await manageable(id);
         const { data, error } = await admin.auth.admin.mfa.listFactors({ userId: id });
         if (error) throw new HttpError(400, error.message);
         for (const f of data?.factors ?? []) {
@@ -164,10 +188,8 @@ Deno.serve(async (req: Request) => {
         const id = needUser();
         const active = body.active === true;
         if (!active && id === callerId) throw new HttpError(400, 'You can’t disable your own account.');
-        if (!active && (await activeAdmins(id)) === 0) {
-          const { data: target } = await admin.from('profiles').select('role').eq('id', id).maybeSingle();
-          if (target?.role === 'admin') throw new HttpError(400, 'At least one active admin must remain.');
-        }
+        const target = await manageable(id);
+        if (!active) await keepAdmins(id, target);
         const { error } = await admin.auth.admin.updateUserById(id, { ban_duration: active ? 'none' : '876000h' });
         if (error) throw new HttpError(400, error.message);
         const { error: pErr } = await admin.from('profiles').update({ active }).eq('id', id);
@@ -179,8 +201,8 @@ Deno.serve(async (req: Request) => {
       case 'delete': {
         const id = needUser();
         if (id === callerId) throw new HttpError(400, 'You can’t delete your own account.');
-        const { data: target } = await admin.from('profiles').select('role,email').eq('id', id).maybeSingle();
-        if (target?.role === 'admin' && (await activeAdmins(id)) === 0) throw new HttpError(400, 'At least one active admin must remain.');
+        const target = await manageable(id);
+        await keepAdmins(id, target);
         const { error } = await admin.auth.admin.deleteUser(id);
         if (error) throw new HttpError(400, error.message);
         await audit(`deleted account ${target?.email ?? ''}`, id);

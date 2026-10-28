@@ -118,11 +118,13 @@ select tests.fails('select public.bootstrap_admin(''admin@example.test'')', 'ano
 -- the API-visible surface: private helpers aren't in public, and anon can't read the colleague list
 select tests.eq((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                  where n.nspname = 'public' and p.prosecdef
-                   and p.proname in ('effective_role','is_staff','is_editor','my_sections','can_write_section','edits_section','my_staff_member_id','cast_vote','record_view','trending_article_ids','staff_directory','is_admin')), 0::bigint,
+                   and p.proname in ('effective_role','is_staff','is_editor','my_sections','can_write_section','edits_section','my_staff_member_id','cast_vote','record_view','trending_article_ids','staff_directory','is_admin','is_super_admin')), 0::bigint,
   'no SECURITY DEFINER helper is exposed in the public schema');
 select tests.fails('select * from public.staff_directory()', 'anon cannot list colleagues', 'permission denied');
 select tests.fails('select private.staff_directory()', 'anon cannot call the private directory function', 'permission denied');
 select tests.fails('select public.is_admin()', 'anon cannot call the is_admin wrapper', 'permission denied');
+select tests.fails('select public.is_super_admin()', 'anon cannot call the is_super_admin wrapper', 'permission denied');
+select tests.fails('select public.bootstrap_super_admin(''admin@example.test'')', 'anon cannot call bootstrap_super_admin', 'permission denied');
 
 -- ------------------------------------------------------------ no profile / inactive
 select tests.login('00000000-0000-0000-0000-000000000006');
@@ -223,7 +225,9 @@ select tests.eq(tests.count('select 1 from public.profiles'), 6::bigint, 'admin 
 select tests.eq(tests.count('select 1 from public.tips'), 4::bigint, 'admin reads all tips');
 update public.profiles set role = 'editor', sections = '{sports}' where id = '00000000-0000-0000-0000-000000000005';
 select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000005'), 'editor', 'admin changes roles');
-select tests.fails($$update public.profiles set role = 'writer' where id = '00000000-0000-0000-0000-000000000001'$$, 'last admin cannot be demoted', 'At least one active admin');
+-- an admin can't change their own role (only super admins manage admin accounts); the last admin can't be disabled
+update public.profiles set role = 'writer' where id = '00000000-0000-0000-0000-000000000001';
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000001'), 'admin', 'an admin cannot demote themselves');
 select tests.fails($$update public.profiles set active = false where id = '00000000-0000-0000-0000-000000000001'$$, 'last admin cannot be deactivated', 'At least one active admin');
 update public.sections set subsections = '{A,B}' where id = 'sports';
 select tests.eq((select subsections from public.sections where id = 'sports'), '{A,B}'::text[], 'admin edits sections');
@@ -259,7 +263,7 @@ insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000000011', 'admin2@example.test'),
   ('00000000-0000-0000-0000-000000000012', 'lost.phone@example.test');
 insert into public.profiles (id, email, display_name, role, active) values
-  ('00000000-0000-0000-0000-000000000011', 'admin2@example.test', 'Second Admin', 'admin', true),
+  ('00000000-0000-0000-0000-000000000011', 'admin2@example.test', 'Second Admin', 'super_admin', true),   -- issues codes for admin-level accounts
   ('00000000-0000-0000-0000-000000000012', 'lost.phone@example.test', 'Lost Phone', 'admin', true);
 
 select tests.login('00000000-0000-0000-0000-000000000004', 'aal2');
@@ -345,6 +349,78 @@ update private.mfa_bypass_codes set expires_at = now() - interval '1 second' whe
 select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000005');
 select tests.eq(public.redeem_mfa_bypass(current_setting('tests.code')), false, 'an expired code no longer works');
 select tests.eq(public.is_admin(), false, 'and grants nothing');
+
+-- ------------------------------------------------------------ super admins
+select tests.logout();
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-000000000021', 'super1@example.test'),
+  ('00000000-0000-0000-0000-000000000022', 'super2@example.test'),
+  ('00000000-0000-0000-0000-000000000024', 'plain.writer@example.test'),
+  ('00000000-0000-0000-0000-000000000025', 'plain.admin@example.test');
+insert into public.profiles (id, email, display_name, role, sections, active) values
+  ('00000000-0000-0000-0000-000000000021', 'super1@example.test', 'Super One', 'super_admin', '{}', true),
+  ('00000000-0000-0000-0000-000000000024', 'plain.writer@example.test', 'Plain Writer', 'writer', '{sports}', true),
+  ('00000000-0000-0000-0000-000000000025', 'plain.admin@example.test', 'Plain Admin', 'admin', '{}', true);
+update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000011';   -- back to a plain admin: 21 is the only super admin from here
+select public.bootstrap_super_admin('super2@example.test', 'Super Two');
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000022'), 'super_admin', 'bootstrap_super_admin creates a super admin');
+update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000022';  -- keep one super admin for the lock-out tests
+
+-- 2FA applies to super admins too
+select tests.login('00000000-0000-0000-0000-000000000021', 'aal1');
+select tests.eq(public.is_admin(), false, 'a super admin without 2FA has no admin rights');
+select tests.eq(public.is_super_admin(), false, 'nor super admin rights');
+select tests.eq(tests.count('select 1 from public.profiles'), 1::bigint, 'and only sees their own profile');
+
+-- a super admin is an admin for everything admins can do
+select tests.login('00000000-0000-0000-0000-000000000021', 'aal2');
+select tests.eq(public.is_super_admin(), true, 'a super admin with 2FA is a super admin');
+select tests.eq(public.is_admin(), true, 'and is an admin');
+select tests.eq(private.is_editor(), true, 'and an editor');
+select tests.eq(tests.count('select 1 from public.tips') >= 3, true, 'reads tips like an admin');
+update public.sections set name = 'Sports (super)' where id = 'sports';
+select tests.eq((select name from public.sections where id = 'sports'), 'Sports (super)', 'edits sections like an admin');
+
+-- a plain admin runs the site but cannot manage admin-level accounts
+select tests.login('00000000-0000-0000-0000-000000000001', 'aal2');
+select tests.eq(public.is_super_admin(), false, 'a plain admin is not a super admin');
+select tests.eq(public.is_admin(), true, 'but is an admin');
+update public.profiles set sections = '{sports,school-news}' where id = '00000000-0000-0000-0000-000000000024';
+select tests.eq((select sections from public.profiles where id = '00000000-0000-0000-0000-000000000024'), '{sports,school-news}'::text[], 'a plain admin manages writers');
+select tests.fails($$update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000024'$$, 'a plain admin cannot make someone an admin', 'Only super admins');
+select tests.fails($$update public.profiles set role = 'super_admin' where id = '00000000-0000-0000-0000-000000000024'$$, 'nor a super admin', 'Only super admins');
+select tests.fails($$update public.profiles set role = 'writer' where id = '00000000-0000-0000-0000-000000000025'$$, 'a plain admin cannot demote another admin', 'Only super admins');
+select tests.fails($$update public.profiles set active = false where id = '00000000-0000-0000-0000-000000000021'$$, 'a plain admin cannot disable a super admin', 'Only super admins');
+select tests.fails($$update public.profiles set display_name = 'Hacked' where id = '00000000-0000-0000-0000-000000000025'$$, 'nor edit another admin in any way', 'Only super admins');
+update public.profiles set display_name = 'Admin Renamed', role = 'super_admin' where id = '00000000-0000-0000-0000-000000000001';
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000001'), 'admin', 'a plain admin cannot promote themselves');
+select tests.eq((select display_name from public.profiles where id = '00000000-0000-0000-0000-000000000001'), 'Admin Renamed', 'but can rename themselves');
+select set_config('tests.code', public.create_mfa_bypass('00000000-0000-0000-0000-000000000024', 15), false);
+select tests.eq(current_setting('tests.code') ~ '^[0-9]{10}$', true, 'a plain admin can issue bypass codes for writers');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000025', 15)$$, 'but not for admins', 'Only super admins');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000021', 15)$$, 'nor for super admins', 'Only super admins');
+select tests.fails($$select public.revoke_mfa_bypass('00000000-0000-0000-0000-000000000025')$$, 'nor revoke those of admins', 'Only super admins');
+
+-- a super admin manages admins
+select tests.login('00000000-0000-0000-0000-000000000021', 'aal2');
+update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000024';
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000024'), 'admin', 'a super admin can promote to admin');
+update public.profiles set role = 'writer' where id = '00000000-0000-0000-0000-000000000024';
+update public.profiles set role = 'writer', sections = '{sports}' where id = '00000000-0000-0000-0000-000000000025';
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000025'), 'writer', 'and demote an admin');
+update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000025';
+select set_config('tests.code', public.create_mfa_bypass('00000000-0000-0000-0000-000000000025', 15), false);
+select tests.eq(current_setting('tests.code') ~ '^[0-9]{10}$', true, 'and issue a bypass code for an admin');
+select public.revoke_mfa_bypass('00000000-0000-0000-0000-000000000025');
+
+-- lock-out protection
+select tests.fails($$update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000021'$$, 'the last super admin cannot be demoted', 'super admin account must remain');
+select tests.fails($$update public.profiles set active = false where id = '00000000-0000-0000-0000-000000000021'$$, 'nor disabled', 'super admin account must remain');
+update public.profiles set role = 'super_admin' where id = '00000000-0000-0000-0000-000000000022';
+update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000021';
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000021'), 'admin', 'with a second super admin, the first can step down');
+select tests.logout();
+update public.profiles set role = 'super_admin' where id = '00000000-0000-0000-0000-000000000021';
 
 -- ------------------------------------------------------------ server-side invariants
 select tests.logout();

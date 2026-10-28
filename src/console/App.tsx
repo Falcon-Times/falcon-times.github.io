@@ -44,7 +44,7 @@ function Frame({ title, nav, routes, other }: Omit<Props, 'require'>) {
         {other && other.show(me) && <a class="btn btn-sm btn-ghost hide-sm" href={other.url}>{other.label}</a>}
         <div class="who">
           <span class="who-name">{me.profile.display_name || me.profile.email}</span>
-          <span class={`badge ${me.isAdmin ? 'badge-gold' : me.isEditor ? 'badge-navy' : ''}`}>{me.isAdmin ? 'Admin' : me.isEditor ? 'Section leader' : 'Writer'}</span>
+          <span class={`badge ${me.isAdmin ? 'badge-gold' : me.isEditor ? 'badge-navy' : ''}`}>{me.isSuperAdmin ? 'Super admin' : me.isAdmin ? 'Admin' : me.isEditor ? 'Section leader' : 'Writer'}</span>
         </div>
         <button class="btn btn-sm" onClick={me.signOut}><Icon name="logout" size={14} /> <span class="hide-sm">Sign out</span></button>
       </header>

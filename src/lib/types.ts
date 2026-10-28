@@ -1,6 +1,9 @@
 // Row shapes mirror supabase/migrations/*.sql.
 
-export type Role = 'writer' | 'editor' | 'admin';
+export type Role = 'writer' | 'editor' | 'admin' | 'super_admin';
+
+/** Admins and super admins: full site access (and two-factor is required). */
+export const isAdminRole = (r: Role) => r === 'admin' || r === 'super_admin';
 export type ArticleStatus = 'draft' | 'submitted' | 'published' | 'archived';
 export type TipStatus = 'new' | 'in_review' | 'resolved' | 'dismissed';
 export type TipCategory = 'story' | 'correction' | 'letter' | 'poll' | 'scores' | 'feedback' | 'other';

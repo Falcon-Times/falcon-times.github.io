@@ -422,6 +422,19 @@ select tests.eq((select role from public.profiles where id = '00000000-0000-0000
 select tests.logout();
 update public.profiles set role = 'super_admin' where id = '00000000-0000-0000-0000-000000000021';
 
+-- ------------------------------------------------------------ keep-alive heartbeat
+select tests.logout();
+update private.keepalive set last_ping = now() - interval '2 hours', pings = 5;
+select tests.anon();
+select tests.eq((public.keepalive() ->> 'pings')::bigint, 6::bigint, 'anon can send the heartbeat, which writes');
+select tests.eq((public.keepalive() ->> 'pings')::bigint, 6::bigint, 'but at most once an hour (spamming changes nothing)');
+select tests.fails($$select * from private.keepalive$$, 'anon cannot read the heartbeat table', 'permission denied');
+select tests.fails($$update private.keepalive set pings = 0$$, 'nor change it', 'permission denied');
+select tests.login('00000000-0000-0000-0000-000000000004');
+select tests.eq((public.keepalive() ->> 'pings')::bigint, 6::bigint, 'signed-in users can call it too');
+select tests.logout();
+select tests.eq((select count(*) from private.keepalive), 1::bigint, 'there is only ever one heartbeat row');
+
 -- ------------------------------------------------------------ server-side invariants
 select tests.logout();
 select tests.eq((select created_at > now() - interval '1 minute' from public.tips order by created_at desc limit 1), true, 'tip timestamps are server-controlled');

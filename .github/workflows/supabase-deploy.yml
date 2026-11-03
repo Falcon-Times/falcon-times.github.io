@@ -2,7 +2,12 @@ name: Deploy database & functions
 
 # Applies supabase/migrations and deploys the admin-users Edge Function to
 # your Supabase project. Run it manually from the Actions tab (or push changes
-# under supabase/ to main). Needs three repository secrets — see docs/SETUP.md.
+# under supabase/ to main, or to this file). Needs three repository secrets — see docs/SETUP.md.
+#
+# Written for Supabase CLI 3.x, where commands default to the *local* database and a hosted
+# project must be targeted with --remote (the linked project). The CLI is installed at "latest",
+# so a future major version may change commands again: if this workflow starts failing right
+# after a CLI release, read the first error and check `supabase <command> --help`.
 on:
   workflow_dispatch:
   push:
@@ -10,6 +15,7 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'supabase/functions/**'
+      - '.github/workflows/supabase-deploy.yml'
 
 permissions:
   contents: read
@@ -36,5 +42,7 @@ jobs:
         with:
           version: latest
       - run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
-      - run: supabase db push
-      - run: supabase functions deploy admin-users --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+      # --remote = the linked project (without it 3.x pushes to a local database); --yes is needed
+      # for changes to a hosted project when nobody is there to confirm.
+      - run: supabase db push --remote --password "$SUPABASE_DB_PASSWORD" --yes
+      - run: supabase functions deploy admin-users --no-verify-jwt --yes

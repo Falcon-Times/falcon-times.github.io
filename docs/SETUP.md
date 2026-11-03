@@ -67,9 +67,10 @@ In this repository: **Settings → Secrets and variables → Actions → New rep
 
 <details><summary>Prefer to do it by hand?</summary>
 
-In Supabase's **SQL Editor**, run each file in `supabase/migrations/` in order (`…01_schema.sql`,
-`…02_storage.sql`, `…03_seed_reference_data.sql`). The `admin-users` function must be deployed with the
-Supabase CLI: `supabase functions deploy admin-users --no-verify-jwt --project-ref <ref>`.
+In Supabase's **SQL Editor**, run **every** file in `supabase/migrations/` in filename order (oldest first;
+skip any you've already run). The `admin-users` function must be deployed with the Supabase CLI (3.x):
+`supabase functions deploy admin-users --no-verify-jwt --remote=<project ref>` (CLI 2.x used `--project-ref <ref>`
+instead of `--remote=<ref>`).
 </details>
 
 ## 5. Turn on GitHub Pages from Actions

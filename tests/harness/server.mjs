@@ -161,6 +161,7 @@ const server = http.createServer(async (req, res) => {
       const o = objects.get(path.replace('/storage/v1/object/public/', ''));
       return o ? send(res, 200, o.data, { 'content-type': o.type }) : err(res, 404, 'not found');
     }
+    if (path === '/storage/v1/object/list/media' && req.method === 'POST') return send(res, 200, []);
     if (path.startsWith('/storage/v1/object/') && req.method === 'POST') {
       if (!claims(req) || claims(req).role !== 'authenticated') return err(res, 401, 'unauthorized');
       const raw = await readBody(req);
@@ -205,6 +206,7 @@ const server = http.createServer(async (req, res) => {
       }
       return err(res, 400, 'unsupported grant');
     }
+    if (path === '/auth/v1/settings') return send(res, 200, { external: { email: true }, disable_signup: true, mailer_autoconfirm: false });
     if (path === '/auth/v1/logout') return send(res, 204, '');
     if (path === '/auth/v1/user') {
       const c = claims(req);

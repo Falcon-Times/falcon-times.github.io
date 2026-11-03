@@ -64,7 +64,8 @@ test.describe('public pages', () => {
       const rpc = async (f: string) => (await fetch(`${base}/rest/v1/rpc/${f}`, { method: 'POST', headers: { apikey: anon, Authorization: `Bearer ${anon}`, 'Content-Type': 'application/json' }, body: '{}' })).status;
       return {
         tips: await get('tips'), profiles: await get('profiles'), audit: await get('audit_log'), articles: await get('articles'),
-        directoryView: await get('staff_directory'),
+        directoryView: await get('staff_directory'), keepaliveTable: await get('keepalive'),
+        heartbeat: await rpc('keepalive'),
         // security-definer helpers live in a schema the API doesn't expose
         isStaff: await rpc('is_staff'), editsSection: await rpc('edits_section'), canWrite: await rpc('can_write_section'), effective: await rpc('effective_role'),
       };
@@ -73,7 +74,8 @@ test.describe('public pages', () => {
     expect(result.profiles).toBe(401);
     expect(result.audit).toBe(401);
     expect(result.articles).toBe(200);
-    for (const k of ['directoryView', 'isStaff', 'editsSection', 'canWrite', 'effective'] as const) expect(result[k], k).toBe(404);
+    expect(result.heartbeat).toBe(200); // the keep-alive workflow's write, callable with the public key
+    for (const k of ['directoryView', 'keepaliveTable', 'isStaff', 'editsSection', 'canWrite', 'effective'] as const) expect(result[k], k).toBe(404);
   });
 });
 

@@ -153,8 +153,14 @@ In the admin panel → **People & access → Add account**.
 * **Activity log** (admin) shows who changed what. Tip text is never logged.
 * **Backups:** Supabase's dashboard (*Database → Backups*) has daily backups on paid plans. On the
   free plan, occasionally export the `articles` and `staff_members` tables from *Table Editor*.
-* **Free-tier pause:** Supabase pauses idle free projects after about a week. The "Keep Supabase awake"
-  workflow pings the project every few days; keep GitHub Actions enabled.
+* **Free-tier pause:** Supabase pauses projects it considers idle after about a week, and plain API reads
+  turned out not to count (the project got a pause warning while the old read-only workflow was running).
+  The "Keep Supabase awake" workflow now runs **daily** and does a small database write (`public.keepalive()`),
+  a read, an auth call and a storage call — see `scripts/keepalive.sh`. It's a mitigation, **not a
+  guarantee**: only a paid Supabase plan prevents pausing. Keep GitHub Actions enabled, and if that workflow
+  ever fails, GitHub emails the repo admins — look at it. If the project is paused anyway, unpause it from the
+  dashboard (possible for 90 days after the pause date, per Supabase's notice); the public site keeps showing
+  its built-in starter content meanwhile, but sign-in, the panels, tips and polls are down.
 
 ## Troubleshooting
 

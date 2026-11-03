@@ -501,7 +501,10 @@ test('admin can disable an account, which blocks sign-in', async ({ browser }) =
   await admin.getByRole('row', { name: new RegExp(WRITER.email) }).getByRole('button', { name: /Manage/ }).click();
   await admin.getByLabel('Account enabled').uncheck();
   await admin.getByRole('button', { name: 'Save changes' }).click();
-  await expect(admin.getByText('Disabled').first()).toBeVisible();
+  // Wait for the saved result: the "Disabled" badge on the person's row. (Plain getByText('Disabled')
+  // also matches the hint "Disabled accounts can't sign in" in the still-open dialog, so the test could
+  // race ahead and try to sign in before the account was actually disabled.)
+  await expect(admin.getByRole('row', { name: new RegExp(WRITER.email) }).locator('.badge-bad', { hasText: 'Disabled' })).toBeVisible();
   const page = await newPage(browser);
   await signIn(page, '/newsroom/', WRITER.email, WRITER.password);
   await expect(page.getByText('didn’t match')).toBeVisible();

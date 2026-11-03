@@ -123,4 +123,6 @@ notes) · `article_views` (anonymous daily counters for "trending") · `staff_me
   social-media link previews show the site's generic card rather than the story's headline.
 * Search covers the 150 newest stories, in the browser.
 * One poll vote per browser is not tamper-proof.
-* Free Supabase projects pause when idle; the keep-alive workflow mitigates this.
+* Free Supabase projects pause when idle. The daily keep-alive workflow (a database write plus read/auth/storage
+  calls) mitigates this but can't guarantee it; only a paid plan does. While paused, the public site shows its
+  built-in fallback content and everything that needs the backend is down.

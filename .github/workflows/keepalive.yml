@@ -1,10 +1,12 @@
 name: Keep Supabase awake
 
-# Free Supabase projects pause after about a week without activity. A tiny
-# read every few days keeps the newspaper's backend running.
+# Free Supabase projects pause after a week they consider idle. Plain API reads turned out not
+# to be enough, so every day this makes a small database write, a read, an auth call and a
+# storage call (scripts/keepalive.sh). It is a mitigation, not a guarantee: only a paid Supabase
+# plan prevents pausing. If this workflow fails, GitHub emails the repository's admins.
 on:
   schedule:
-    - cron: '17 6 */3 * *'
+    - cron: '17 6 * * *'
   workflow_dispatch:
 
 permissions: {}
@@ -12,12 +14,12 @@ permissions: {}
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     env:
       URL: ${{ secrets.SUPABASE_URL }}
       KEY: ${{ secrets.SUPABASE_ANON_KEY }}
     steps:
-      - name: Ping
-        run: |
-          if [ -z "$URL" ] || [ -z "$KEY" ]; then echo "Secrets not set yet — nothing to do."; exit 0; fi
-          curl -fsS "$URL/rest/v1/sections?select=id&limit=1" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" > /dev/null
-          echo "Backend is awake."
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/keepalive.sh
+      - run: ./scripts/keepalive.sh

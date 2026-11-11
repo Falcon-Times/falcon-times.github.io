@@ -435,6 +435,62 @@ select tests.eq((public.keepalive() ->> 'pings')::bigint, 6::bigint, 'signed-in 
 select tests.logout();
 select tests.eq((select count(*) from private.keepalive), 1::bigint, 'there is only ever one heartbeat row');
 
+-- ------------------------------------------------------------ photographers
+select tests.logout();
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-000000000031', 'photog@example.test');
+insert into public.profiles (id, email, display_name, role, sections, active) values
+  ('00000000-0000-0000-0000-000000000031', 'photog@example.test', 'Pat Photog', 'photographer', '{}', true);
+select tests.fails($$update public.profiles set sections = '{sports}' where id = '00000000-0000-0000-0000-000000000031'$$, 'a photographer cannot be given sections', 'profiles_photographer_no_sections');
+-- remember what the stories looked like
+create temp table photog_before as select id, title, deck, body_md, section_id, status, slug, featured, is_lead, published_at, tags, created_by from public.articles;
+grant select on photog_before to public;
+
+select tests.login('00000000-0000-0000-0000-000000000031');
+select tests.eq(tests.count('select 1 from public.articles'), (select count(*) from photog_before)::bigint, 'a photographer reads every story: any section, any status');
+select tests.eq(tests.count($$select 1 from public.articles where slug in ('draft-news','draft-sports','future-news','pub-news')$$), 4::bigint, 'including other people''s drafts and scheduled stories');
+select tests.eq(tests.count('select 1 from public.tips'), 0::bigint, 'but no tips');
+select tests.eq(tests.count('select 1 from public.polls'), (select count(*) from public.polls where active)::bigint, 'and only the polls everyone sees');
+select tests.eq(tests.count('select 1 from public.article_comments'), 0::bigint, 'and no internal notes');
+select tests.eq(tests.count('select 1 from public.profiles'), 1::bigint, 'and only their own profile');
+select tests.eq(public.is_admin(), false, 'a photographer is not an admin');
+select tests.eq(private.is_editor(), false, 'nor an editor');
+select tests.eq(private.is_photographer(), true, 'they are a photographer');
+
+-- they can set the image fields -- on a draft in any section and on a live story
+update public.articles set cover_image_url = 'https://img.test/a.webp', image_alt = 'Alt text', image_caption = 'A caption', photo_credit = 'Pat Photog'
+  where slug = 'draft-sports';
+select tests.eq((select image_caption from public.articles where slug = 'draft-sports'), 'A caption', 'a photographer sets image fields on another section''s draft');
+update public.articles set cover_image_url = 'https://img.test/b.webp', image_alt = 'Live alt', photo_credit = 'Pat Photog' where slug = 'pub-news';
+select tests.eq((select cover_image_url from public.articles where slug = 'pub-news'), 'https://img.test/b.webp', 'and on a published story');
+
+-- ...and nothing else, however the request is built
+update public.articles set
+    title = 'Hacked', deck = 'x', body_md = 'rewritten', section_id = 'sports', status = 'archived', slug = 'hacked',
+    featured = true, is_lead = true, published_at = now() + interval '9 days', tags = '{evil}', created_by = '00000000-0000-0000-0000-000000000031',
+    update_note = 'changed', image_caption = 'Caption two'
+  where slug = 'pub-news';
+select tests.eq((select image_caption from public.articles where slug = 'pub-news'), 'Caption two', 'image fields change in a mixed update');
+select tests.eq((select count(*) from public.articles a join photog_before b using (id)
+                 where a.title is distinct from b.title or a.deck is distinct from b.deck or a.body_md is distinct from b.body_md
+                    or a.section_id is distinct from b.section_id or a.status is distinct from b.status or a.slug is distinct from b.slug
+                    or a.featured is distinct from b.featured or a.is_lead is distinct from b.is_lead
+                    or a.published_at is distinct from b.published_at or a.tags is distinct from b.tags or a.created_by is distinct from b.created_by), 0::bigint,
+  'but the headline, text, section, status, link, pins, schedule, tags and author are untouched');
+select tests.eq((select update_note from public.articles where slug = 'pub-news'), '', 'and no update notice can be stamped');
+select tests.fails($$insert into public.articles (slug, title, section_id, status) values ('photog-story', 'Mine', 'sports', 'draft')$$, 'a photographer cannot start a story', 'row-level security');
+select tests.affects($$delete from public.articles where slug = 'draft-sports'$$, 0, 'nor delete one');
+select tests.affects($$update public.profiles set role = 'admin' where id = auth.uid()$$, 1, 'a role change on their own profile is silently ignored');
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000031'), 'photographer', 'so a photographer cannot promote themselves');
+select tests.eq(public.is_admin(), false, 'still not an admin');
+insert into storage.objects (bucket_id, name, owner) values ('media', 'photog.jpg', auth.uid());   -- would raise if denied
+do $$ begin raise notice 'ok - they can upload to the media library'; end $$;
+
+-- other roles are unaffected: a writer still cannot edit someone else's story
+select tests.login('00000000-0000-0000-0000-000000000004');
+select tests.affects($$update public.articles set image_alt = 'writer edit' where slug = 'draft-sports'$$, 0, 'writers still cannot touch other people''s stories');
+select tests.logout();
+drop table photog_before;
+
 -- ------------------------------------------------------------ server-side invariants
 select tests.logout();
 select tests.eq((select created_at > now() - interval '1 minute' from public.tips order by created_at desc limit 1), true, 'tip timestamps are server-controlled');

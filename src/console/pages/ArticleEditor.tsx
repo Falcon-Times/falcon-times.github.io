@@ -8,7 +8,7 @@ import type { Article, ArticleComment } from '@/lib/types';
 import { Icon } from '@/ui/Icon';
 import { ErrorNote, Loading } from '@/ui/States';
 import { toast, toastError } from '@/ui/Toast';
-import { addComment, deleteArticle, getArticle, listComments, saveArticle, type ArticleInput } from '../api';
+import { addComment, deleteArticle, getArticle, listComments, saveArticle, saveArticleImages, type ArticleInput } from '../api';
 import { useMe } from '../auth';
 import { Checkbox, ImageField, SelectField, TagsField, TextArea, TextField } from '../fields';
 import { useRefs } from '../refs';
@@ -77,8 +77,16 @@ export function ArticleEditor({ id }: { id: string | null }) {
   if (!form) return <Loading label="Opening story…" />;
 
   const isNew = !form.id;
+  if (me.isPhotographer && isNew) {
+    return (
+      <div class="stack"><a href={href('/articles')} class="back"><Icon name="arrow-left" size={14} /> All stories</a>
+        <div class="notice"><Icon name="info" />Photographers don’t write stories. Open one from <a href={href('/articles')}>Stories</a> to add or change its photos.</div></div>
+    );
+  }
   const editorial = me.isAdmin || (me.isEditor && me.profile.sections.includes(form.section_id));
-  const locked = !isNew && (form.status === 'published' || form.status === 'archived') && !editorial;
+  const imagesOnly = me.isPhotographer && !editorial;   // may change the photos, nothing else
+  const locked = !isNew && (form.status === 'published' || form.status === 'archived') && !editorial && !imagesOnly;
+  const frozen = locked || imagesOnly;                    // the writing is read-only
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => { setForm((f) => (f ? { ...f, [k]: v } : f)); setDirty(true); };
   const section = sections.find((s) => s.id === form.section_id);
   const sectionOptions = (editorial || isNew ? mySections : sections.filter((s) => s.id === form.section_id)).map((s) => ({ value: s.id, label: s.name }));
@@ -115,6 +123,20 @@ export function ArticleEditor({ id }: { id: string | null }) {
     } catch (e) { toastError(e); } finally { setBusy(false); }
   }
 
+  async function persistImages() {
+    if (!form?.id) return;
+    setBusy(true);
+    try {
+      const saved = await saveArticleImages(form.id, {
+        cover_image_url: form.cover_image_url, image_alt: form.image_alt.trim(),
+        image_caption: form.image_caption.trim(), photo_credit: form.photo_credit.trim(),
+      });
+      drafts.remove(draftKey);
+      setDirty(false); setRestore(null); setOriginal(saved); setForm(fromArticle(saved));
+      toast(saved.status === 'published' ? 'Photos updated on the live story' : 'Photos saved', 'ok');
+    } catch (e) { toastError(e); } finally { setBusy(false); }
+  }
+
   async function remove() {
     if (!form?.id || !confirm('Delete this story permanently?')) return;
     try { await deleteArticle(form.id); drafts.remove(draftKey); setDirty(false); toast('Story deleted', 'ok'); navigate('/articles'); } catch (e) { toastError(e); }
@@ -141,7 +163,7 @@ export function ArticleEditor({ id }: { id: string | null }) {
         </div>
         <div class="row">
           {!isNew && form.status === 'published' && <a class="btn btn-sm" href={`/#/article/${form.slug}`} target="_blank" rel="noopener"><Icon name="external" size={14} /> View live</a>}
-          {!isNew && (me.isAdmin || form.status !== 'published') && <button class="btn btn-sm btn-danger" onClick={remove}><Icon name="trash" size={14} /> Delete</button>}
+          {!isNew && !imagesOnly && (me.isAdmin || form.status !== 'published') && <button class="btn btn-sm btn-danger" onClick={remove}><Icon name="trash" size={14} /> Delete</button>}
         </div>
       </div>
 
@@ -155,14 +177,15 @@ export function ArticleEditor({ id }: { id: string | null }) {
       {isNew && mySections.length === 0 && (
         <div class="notice notice-warn"><Icon name="warning" />You haven’t been assigned to a section yet, so you can’t start a story. Ask an admin to add you to one.</div>
       )}
+      {imagesOnly && <div class="notice"><Icon name="camera" />You can add and change this story’s photos (cover photo, description, caption and credit). The writing is read-only.</div>}
       {locked && <div class="notice notice-warn"><Icon name="lock" />This story has been published, so only your section leader can change it. Ask them to make edits, or leave a note below.</div>}
 
       <div class="editor-grid">
         <div class="stack" style={{ '--stack': '16px' }}>
-          <textarea class="title-input" placeholder="Headline" value={form.title} maxLength={200} disabled={locked} rows={1}
+          <textarea class="title-input" placeholder="Headline" value={form.title} maxLength={200} disabled={frozen} rows={1}
             ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } }}
             onInput={(e) => set('title', (e.target as HTMLTextAreaElement).value.replace(/\n/g, ' '))} aria-label="Headline" />
-          <TextArea label="Summary line (deck)" value={form.deck} onChange={(v) => set('deck', v)} rows={2} max={400} hint="One or two sentences that make someone want to read on." />
+          <TextArea label="Summary line (deck)" value={form.deck} onChange={(v) => set('deck', v)} rows={2} max={400} disabled={frozen} hint="One or two sentences that make someone want to read on." />
           <div class="md-box">
             <div class="md-tabs" role="tablist">
               <button type="button" role="tab" aria-selected={tab === 'write'} class={`pill ${tab === 'write' ? 'on' : ''}`} onClick={() => setTab('write')}>Write</button>
@@ -171,17 +194,23 @@ export function ArticleEditor({ id }: { id: string | null }) {
               <span class="small muted">{form.body_md.trim().split(/\s+/).filter(Boolean).length} words · {readingMinutes(form.body_md)} min read</span>
             </div>
             {tab === 'write'
-              ? <MarkdownEditor value={form.body_md} onChange={(v) => set('body_md', v)} disabled={locked} userId={me.userId} />
+              ? <MarkdownEditor value={form.body_md} onChange={(v) => set('body_md', v)} disabled={frozen} userId={me.userId} />
               : <Preview form={form} />}
           </div>
-          {!isNew && form.id && <Feedback articleId={form.id} />}
+          {!isNew && form.id && !imagesOnly && <Feedback articleId={form.id} />}
         </div>
 
         <aside class="stack editor-side" style={{ '--stack': '14px' }}>
           <section class="side-box stack" style={{ '--stack': '10px' }}>
             <h2 class="side-h">Publish</h2>
             {form.published_at && form.status === 'published' && <p class="small muted">Published {formatDateTime(form.published_at)}</p>}
-            {!locked && (
+            {imagesOnly && (
+              <div class="stack" style={{ '--stack': '8px' }}>
+                <button class="btn btn-primary btn-block" disabled={busy || !dirty} onClick={persistImages}><Icon name="save" size={15} /> Save photos</button>
+                <p class="small muted">Only the photo fields below are saved.</p>
+              </div>
+            )}
+            {!locked && !imagesOnly && (
               <div class="stack" style={{ '--stack': '8px' }}>
                 {editorial ? (
                   <>
@@ -220,12 +249,12 @@ export function ArticleEditor({ id }: { id: string | null }) {
 
           <section class="side-box stack" style={{ '--stack': '10px' }}>
             <h2 class="side-h">Section</h2>
-            <SelectField label="Section" value={form.section_id} options={sectionOptions} onChange={(v) => { set('section_id', v); set('subsection', null); }} disabled={locked} />
+            <SelectField label="Section" value={form.section_id} options={sectionOptions} onChange={(v) => { set('section_id', v); set('subsection', null); }} disabled={frozen} />
             {section && section.subsections.length > 0 && (
-              <SelectField label="Sub-section" value={form.subsection ?? ''} onChange={(v) => set('subsection', v || null)}
+              <SelectField label="Sub-section" value={form.subsection ?? ''} onChange={(v) => set('subsection', v || null)} disabled={frozen}
                 options={[{ value: '', label: '— none —' }, ...section.subsections.map((s) => ({ value: s, label: s }))]} />
             )}
-            <TagsField label="Tags" value={form.tags} onChange={(v) => set('tags', v)} placeholder="homecoming, fall play" />
+            <TagsField label="Tags" value={form.tags} onChange={(v) => set('tags', v)} placeholder="homecoming, fall play" disabled={frozen} />
           </section>
 
           <section class="side-box stack" style={{ '--stack': '10px' }}>
@@ -233,7 +262,7 @@ export function ArticleEditor({ id }: { id: string | null }) {
             <div class="checks column">
               {people.map((p) => (
                 <label key={p.id} class="check">
-                  <input type="checkbox" checked={form.byline_ids.includes(p.id)}
+                  <input type="checkbox" checked={form.byline_ids.includes(p.id)} disabled={frozen}
                     onChange={(e) => set('byline_ids', (e.target as HTMLInputElement).checked ? [...form.byline_ids, p.id] : form.byline_ids.filter((x) => x !== p.id))} />
                   {p.name}
                 </label>
@@ -252,7 +281,7 @@ export function ArticleEditor({ id }: { id: string | null }) {
 
           <section class="side-box stack" style={{ '--stack': '8px' }}>
             <h2 class="side-h">Checklist</h2>
-            <ul class="checklist">{checklist.map((c) => <li key={c.text} class={c.ok ? 'ok' : ''}><Icon name={c.ok ? 'circle-check' : 'clock'} size={15} /> {c.text}</li>)}</ul>
+            <ul class="checklist">{checklist.filter((c) => !imagesOnly || /photo/i.test(c.text)).map((c) => <li key={c.text} class={c.ok ? 'ok' : ''}><Icon name={c.ok ? 'circle-check' : 'clock'} size={15} /> {c.text}</li>)}</ul>
           </section>
         </aside>
       </div>

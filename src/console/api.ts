@@ -59,6 +59,13 @@ export async function saveArticle(id: string | null, input: ArticleInput, userId
   throw new Error('Could not generate a unique link for this story. Try changing the headline slightly.');
 }
 
+/** What a photographer may change on a story. The database refuses everything else. */
+export type ArticleImages = Pick<Article, 'cover_image_url' | 'image_alt' | 'image_caption' | 'photo_credit'>;
+export async function saveArticleImages(id: string, images: ArticleImages): Promise<Article> {
+  const res = await db().from('articles').update(images).eq('id', id).select('*').single();
+  return unwrap(res) as Article;
+}
+
 export async function deleteArticle(id: string) {
   const res = await db().from('articles').delete().eq('id', id).select('id');
   if (res.error) throw new Error(res.error.message);

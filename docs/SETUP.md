@@ -110,7 +110,8 @@ In the admin panel → **People & access → Add account**.
 | Person | Role | Sections |
 | --- | --- | --- |
 | Section leaders (School News, Sports, Opinion + Advice, Culture + Entertainment, Social Media, Photography + Video) | **Section leader** | their own section |
-| Reporters, photographers, designers | **Writer** | the section(s) they write for |
+| Reporters, designers | **Writer** | the section(s) they write for |
+| Photographers | **Photographer** — sees every story, can change only its photos (cover photo, description, caption, credit), never the writing | (none) |
 | Trusted site administrators | **Admin** (only a super admin can create these) | (all) |
 | Whoever owns the site's accounts (a teacher/advisor, a second owner) | **Super admin** | (all) |
 

@@ -21,6 +21,7 @@ export function Articles() {
   const [tab, setTab] = useState<Tab>(me.isEditor ? 'submitted' : 'all');
   const [section, setSection] = useState('');
   const [q, setQ] = useState('');
+  const [needsPhoto, setNeedsPhoto] = useState(false);
   const [tick, setTick] = useState(0);
   useEffect(() => {
     listArticles().then((r) => {
@@ -32,7 +33,7 @@ export function Articles() {
 
   // RLS lets everyone read published stories; here we narrow to "my work".
   const mine = useMemo(() => (rows ?? []).filter((a) =>
-    me.isAdmin || a.created_by === me.userId || (me.isEditor && me.profile.sections.includes(a.section_id))), [rows, me]);
+    me.isAdmin || me.isPhotographer || a.created_by === me.userId || (me.isEditor && me.profile.sections.includes(a.section_id))), [rows, me]);
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: mine.length };
     for (const a of mine) c[a.status] = (c[a.status] ?? 0) + 1;
@@ -40,7 +41,7 @@ export function Articles() {
   }, [mine]);
   const shown = mine.filter((a) =>
     (tab === 'all' || a.status === tab) && (!section || a.section_id === section) &&
-    (!q || a.title.toLowerCase().includes(q.toLowerCase())));
+    (!needsPhoto || !a.cover_image_url) && (!q || a.title.toLowerCase().includes(q.toLowerCase())));
 
   async function flag(a: ArticleListItem, patch: Parameters<typeof setArticleFlags>[1], msg: string) {
     try { await setArticleFlags(a.id, patch); toast(msg, 'ok'); setTick((t) => t + 1); } catch (e) { toastError(e); }
@@ -50,8 +51,8 @@ export function Articles() {
   return (
     <div class="stack" style={{ '--stack': '18px' }}>
       <div class="spread">
-        <h1 class="page-title">{me.isEditor ? 'Stories' : 'My stories'}</h1>
-        <a class="btn btn-primary" href={href('/articles/new')}><Icon name="plus" size={16} /> New story</a>
+        <h1 class="page-title">{me.isEditor || me.isPhotographer ? 'Stories' : 'My stories'}</h1>
+        {!me.isPhotographer && <a class="btn btn-primary" href={href('/articles/new')}><Icon name="plus" size={16} /> New story</a>}
       </div>
       <div class="toolbar">
         <div class="tabs-pill" role="tablist">
@@ -66,12 +67,13 @@ export function Articles() {
             <option value="">All sections</option>
             {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
+          <label class="check"><input type="checkbox" checked={needsPhoto} onChange={(e) => setNeedsPhoto((e.target as HTMLInputElement).checked)} /> Needs a cover photo</label>
           <input class="input select-sm" type="search" placeholder="Search headlines…" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} aria-label="Search headlines" />
         </div>
       </div>
       {error ? <ErrorNote error={error} /> : !rows ? <Loading /> : shown.length === 0 ? (
         <Empty icon="file" title={tab === 'submitted' ? 'Nothing waiting for review' : 'No stories here yet'}>
-          {tab === 'submitted' ? 'When writers submit stories in your sections they will show up here.' : <>Start something new with <a href={href('/articles/new')}>New story</a>.</>}
+          {tab === 'submitted' ? 'When writers submit stories in your sections they will show up here.' : me.isPhotographer ? 'Nothing matches that filter.' : <>Start something new with <a href={href('/articles/new')}>New story</a>.</>}
         </Empty>
       ) : (
         <div class="table-wrap">

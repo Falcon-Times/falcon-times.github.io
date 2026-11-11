@@ -19,6 +19,7 @@ export interface Me {
   profile: Profile;
   isEditor: boolean;     // section leader or admin
   isAdmin: boolean;      // admin or super admin
+  isPhotographer: boolean; // sees every story, may change only its photos
   isSuperAdmin: boolean; // may manage admin-level accounts
   viaBypass: boolean;    // signed in with a 2FA bypass code instead of an authenticator code
   signOut: () => Promise<void>;
@@ -111,7 +112,7 @@ export function AuthGate({ require: needs, title, children }: {
       const me: Me = {
         session: phase.session, userId: phase.session.user.id, profile: phase.profile,
         isEditor: phase.profile.role === 'editor' || isAdminRole(phase.profile.role),
-        isAdmin: isAdminRole(phase.profile.role), isSuperAdmin: phase.profile.role === 'super_admin', viaBypass: phase.viaBypass, signOut, refresh: evaluate,
+        isAdmin: isAdminRole(phase.profile.role), isPhotographer: phase.profile.role === 'photographer', isSuperAdmin: phase.profile.role === 'super_admin', viaBypass: phase.viaBypass, signOut, refresh: evaluate,
       };
       return <MeCtx.Provider value={me}>{children}</MeCtx.Provider>;
     }

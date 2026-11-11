@@ -1,4 +1,4 @@
-# Newsroom guide — writers & section leaders
+# Newsroom guide — writers, photographers & section leaders
 
 Welcome to the Falcon Times newsroom! Sign in at **<https://falcon-times.github.io/newsroom/>** with the
 email and temporary password your admin gave you. The first time, you'll choose your own password
@@ -42,6 +42,15 @@ Use **Editor notes** at the bottom to chat privately with your editor about the 
   *Updated <time> — <your note>* at the top. That's our promise: transparent updates and corrections.
 * **Pin to trending carousel** and **Make this the lead story** control the front page.
 * **Archive** hides a story without deleting it.
+
+## Photographers
+
+Photographers can open **every** story — in any section and any status, drafts included — but can change only its
+**photos**: the cover photo, its description (alt text), caption and credit. The headline, text, section, tags and
+bylines are read-only, and you can't start, publish or delete stories. Use **Needs a cover photo** on the Stories page to
+find stories waiting for pictures, add the photo, and press **Save photos**. You can update photos on published stories
+too; the live site shows the new ones straight away (no “Updated” notice is added). Write a good description
+for every photo, and credit yourself.
 
 ## Section-leader tools
 

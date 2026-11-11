@@ -40,12 +40,12 @@ export function NumberField({ label, value, onChange, hint, class: cls }: { labe
   );
 }
 
-export function TextArea({ label, value, onChange, hint, rows = 4, max, required, class: cls }: {
-  label: string; value: string; onChange: Change<string>; hint?: string; rows?: number; max?: number; required?: boolean; class?: string;
+export function TextArea({ label, value, onChange, hint, rows = 4, max, required, class: cls, disabled }: {
+  label: string; value: string; onChange: Change<string>; hint?: string; rows?: number; max?: number; required?: boolean; class?: string; disabled?: boolean;
 }) {
   return (
     <Field label={label} hint={hint ?? (max ? `${value.length}/${max}` : undefined)} class={cls}>
-      <textarea class="textarea" rows={rows} maxLength={max} required={required} value={value} onInput={(e) => onChange(val(e))} />
+      <textarea class="textarea" rows={rows} maxLength={max} required={required} disabled={disabled} value={value} onInput={(e) => onChange(val(e))} />
     </Field>
   );
 }
@@ -71,13 +71,13 @@ export function Checkbox({ label, checked, onChange, hint, disabled }: { label: 
   );
 }
 
-export function TagsField({ label, value, onChange, hint, placeholder, class: cls }: {
-  label: string; value: string[]; onChange: Change<string[]>; hint?: string; placeholder?: string; class?: string;
+export function TagsField({ label, value, onChange, hint, placeholder, class: cls, disabled }: {
+  label: string; value: string[]; onChange: Change<string[]>; hint?: string; placeholder?: string; class?: string; disabled?: boolean;
 }) {
   const [text, setText] = useState(value.join(', '));
   return (
     <Field label={label} hint={hint ?? 'Separate with commas'} class={cls}>
-      <input class="input" value={text} placeholder={placeholder}
+      <input class="input" value={text} placeholder={placeholder} disabled={disabled}
         onInput={(e) => { setText(val(e)); onChange(val(e).split(',').map((t) => t.trim()).filter(Boolean)); }} />
     </Field>
   );

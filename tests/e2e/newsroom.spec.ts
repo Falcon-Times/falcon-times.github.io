@@ -9,6 +9,7 @@ const ADMIN = { email: `admin-${stamp}@example.test`, password: 'AdminPassw0rd!!
 const WRITER = { email: `writer-${stamp}@example.test`, temp: '', password: 'WriterPassw0rd!!' };
 const EDITOR = { email: `editor-${stamp}@example.test`, temp: '', password: 'EditorPassw0rd!!' };
 const ADMIN2 = { email: `admin2-${stamp}@example.test`, temp: '', password: 'SecondAdm1nPass!!' };
+const PHOTO = { email: `photo-${stamp}@example.test`, temp: '', password: 'PhotoPassw0rd!!' };
 const HEADLINE = `Homecoming float wins big ${stamp}`;
 const TIP = `Someone should look into the cafeteria lines ${stamp}`;
 
@@ -300,6 +301,92 @@ test('section leader reviews, publishes and later updates the story', async ({ b
   await page.context().close();
 });
 
+test('a photographer sees every story but can only change its photos', async ({ browser }) => {
+  // An admin adds the photographer. They have no sections (they work across all of them).
+  await admin.goto('/admin/#/people');
+  await admin.getByRole('button', { name: 'Add account' }).click();
+  await admin.getByLabel('Email').fill(PHOTO.email);
+  await admin.getByLabel('Display name').fill('Pat Photog');
+  await admin.getByLabel('Role').selectOption({ label: 'Photographer' });
+  await expect(admin.getByRole('dialog').getByText('Sections they can write for')).toHaveCount(0);
+  await admin.getByRole('button', { name: 'Create account' }).click();
+  const temp = admin.locator('.secret-box code');
+  await expect(temp).toBeVisible();
+  PHOTO.temp = (await temp.textContent())!.trim();
+  await admin.getByRole('button', { name: /shared it/ }).click();
+  await expect(admin.getByRole('row', { name: new RegExp(PHOTO.email) }).getByText('Photographer', { exact: true })).toBeVisible();
+
+  const page = await newPage(browser);
+  await signIn(page, '/newsroom/', PHOTO.email, PHOTO.temp);
+  await page.getByLabel(/^New password/).fill(PHOTO.password);
+  await page.getByLabel('Confirm new password').fill(PHOTO.password);
+  await page.getByRole('button', { name: 'Save new password' }).click();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Pat/ })).toBeVisible();
+  await expect(page.locator('.who .badge')).toHaveText('Photographer');
+  await expect(page.getByRole('link', { name: 'Tip line' })).toHaveCount(0);
+
+  // Every story is listed (they didn't write it, and it isn't in a section of theirs), but they can't start one.
+  await page.getByRole('link', { name: 'Stories', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Stories', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'New story' })).toHaveCount(0);
+  await page.getByRole('link', { name: HEADLINE }).click();
+  await page.goto('/newsroom/#/articles/new');
+  await expect(page.getByText('Photographers don’t write stories')).toBeVisible();
+  await page.goBack();
+
+  // The writing is read-only; the photo fields are not.
+  await expect(page.getByRole('textbox', { name: 'Headline', exact: true })).toBeDisabled();
+  await expect(page.getByLabel('Summary line (deck)')).toBeDisabled();
+  await expect(page.getByLabel('Story text')).toBeDisabled();
+  await expect(page.getByRole('button', { name: /Publish|Submit for review|Delete/ })).toHaveCount(0);
+  const save = page.getByRole('button', { name: 'Save photos' });
+  await expect(save).toBeDisabled(); // nothing changed yet
+  await page.locator('input[type=file]').last().setInputFiles({ name: 'float.png', mimeType: 'image/png', buffer: twoTonePng() });
+  await expect(page.locator('.cover-previews')).toBeVisible();
+  await page.getByLabel('Description (alt text)').fill('A parade float with red and blue banners');
+  await page.getByLabel('Caption').fill('The senior float rolls past the stands.');
+  await page.getByLabel('Photo credit').fill('Pat Photog');
+  await save.click();
+  await expect(page.getByText('Photos updated on the live story')).toBeVisible();
+
+  // The database agrees: photos saved, writing untouched, no "Updated" stamp.
+  const c = db(); await c.connect();
+  const q = () => c.query('select id, title, body_md, status, cover_image_url, image_alt, image_caption, photo_credit, update_note from public.articles where title = $1', [HEADLINE]);
+  const { rows: [row] } = await q();
+  expect(row.image_caption).toBe('The senior float rolls past the stands.');
+  expect(row.photo_credit).toBe('Pat Photog');
+  expect(row.cover_image_url).toBeTruthy();
+  expect(row.status).toBe('published');
+  const before = { title: row.title, body: row.body_md };
+
+  // A hand-made request can't do more than the screen does: only the photo field changes.
+  const token = await page.evaluate(() => {
+    const stored = Object.entries(localStorage).map(([, v]) => { try { return JSON.parse(v); } catch { return null; } }).find((v) => v?.access_token);
+    return stored.access_token as string;
+  });
+  const anon = await (await fetch('http://127.0.0.1:54330/__test/anon-key')).text();
+  const res = await fetch(`http://127.0.0.1:54330/rest/v1/articles?id=eq.${row.id}`, {
+    method: 'PATCH', headers: { Authorization: `Bearer ${token}`, apikey: anon, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ title: 'Hacked headline', body_md: 'rewritten', status: 'archived', update_note: 'sneaky', image_alt: 'Second description' }),
+  });
+  expect(res.status).toBe(204);
+  const { rows: [after] } = await q();
+  await c.end();
+  expect(after.title).toBe(before.title);
+  expect(after.body_md).toBe(before.body);
+  expect(after.status).toBe('published');
+  expect(after.update_note).toBe(row.update_note); // no new "Updated" notice can be stamped
+  expect(after.image_alt).toBe('Second description');
+
+  // Readers see the new photo and caption on the live story.
+  const reader = await newPage(browser);
+  await reader.goto('/');
+  await reader.getByRole('link', { name: HEADLINE }).first().click();
+  await expect(reader.locator('.article-figure figcaption')).toContainText('The senior float rolls past the stands.');
+  await reader.context().close();
+  await page.context().close();
+});
+
 test('admin sees the audit trail and can change a site setting', async () => {
   await admin.goto('/admin/#/activity');
   const row = admin.getByRole('row', { name: new RegExp(`created writer account ${WRITER.email}`) });
@@ -424,7 +511,7 @@ test('a super admin is labelled, and can create admin accounts', async () => {
   await expect(admin.getByRole('row', { name: new RegExp(ADMIN.email) }).getByText('Super admin', { exact: true })).toBeVisible();
   await admin.getByRole('button', { name: 'Add account' }).click();
   const roles = await admin.getByRole('dialog').getByLabel('Role').locator('option').allTextContents();
-  expect(roles).toEqual(['Writer', 'Section leader', 'Admin', 'Super admin']);
+  expect(roles).toEqual(['Writer', 'Section leader', 'Photographer', 'Admin', 'Super admin']);
   await admin.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
 });
 
@@ -441,7 +528,7 @@ test('a plain admin runs the site but cannot manage admin accounts — in the sc
   await expect(page.getByRole('row', { name: new RegExp(WRITER.email) }).getByRole('button', { name: /Manage/ })).toBeEnabled();
   await page.getByRole('button', { name: 'Add account' }).click();
   const options = await page.getByRole('dialog').getByLabel('Role').locator('option').allTextContents();
-  expect(options).toEqual(['Writer', 'Section leader']);
+  expect(options).toEqual(['Writer', 'Section leader', 'Photographer']);
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
 
   // The server says no too, even to a hand-made request with a valid admin session.

@@ -14,21 +14,26 @@ decides what each request may do**.
 
 ## Who can do what
 
-Roles live in `public.profiles`: writer < section leader < admin < **super admin**. Only an admin (or the
+Roles live in `public.profiles`: writer < section leader < admin < **super admin** (plus **photographer**, a side role: sees every story, changes only photos). Only an admin (or the
 `admin-users` function) can change them, and only a super admin can touch admin-level accounts (below).
 
-| | Reader | Writer | Section leader | Admin | Super admin |
-| --- | :-: | :-: | :-: | :-: | :-: |
-| Read published stories, polls, scores | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Vote in a poll / send a tip | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Draft & submit stories in their sections | | ✅ | ✅ | ✅ (any) | ✅ |
-| Edit a story after it's published | | | ✅ own sections | ✅ | ✅ |
-| Publish, schedule, unpublish, feature, set the lead story | | | ✅ own sections | ✅ | ✅ |
-| Read & triage tips | | | ✅ own sections + general | ✅ all | ✅ |
-| Scoreboard (sports leader), polls, announcements, quotes | | | ✅ | ✅ | ✅ |
-| Edit own bio/photo | | ✅ | ✅ | ✅ | ✅ |
-| Staff roster, sections, settings, activity log; accounts of writers & section leaders | | | | ✅ **(needs 2FA)** | ✅ |
-| Create, change, disable, delete or reset **admin and super admin** accounts (and their bypass codes) | | | | | ✅ **(needs 2FA)** |
+| | Reader | Writer | Section leader | Photographer | Admin | Super admin |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: |
+| Read published stories, polls, scores | ✅ | ✅ | ✅ | ✅ (and every draft) | ✅ | ✅ |
+| Vote in a poll / send a tip | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Draft & submit stories in their sections | | ✅ | ✅ | | ✅ (any) | ✅ |
+| Edit a story after it's published | | | ✅ own sections | ✅ photos only | ✅ | ✅ |
+| Publish, schedule, unpublish, feature, set the lead story | | | ✅ own sections | | ✅ | ✅ |
+| Read & triage tips | | | ✅ own sections + general | | ✅ all | ✅ |
+| Scoreboard (sports leader), polls, announcements, quotes | | | ✅ | | ✅ | ✅ |
+| Edit own bio/photo | | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Staff roster, sections, settings, activity log; accounts of writers, section leaders & photographers | | | | | ✅ **(needs 2FA)** | ✅ |
+| Create, change, disable, delete or reset **admin and super admin** accounts (and their bypass codes) | | | | | | ✅ **(needs 2FA)** |
+
+*Photographers:* RLS lets them read every article and update it; the `guard_articles` trigger then puts every
+column except `cover_image_url`, `image_alt`, `image_caption` and `photo_credit` back to its old value, so even a
+hand-made request can't touch the writing, status or schedule. They can't insert or delete stories, read notes or
+tips, or hold sections (a table constraint), so they never count as writers.
 
 A "section" is assigned to each person by an admin (`profiles.sections`). A writer for *Sports* cannot
 touch *School News*, even by crafting requests by hand — the database refuses.

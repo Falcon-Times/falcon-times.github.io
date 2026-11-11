@@ -13,9 +13,11 @@ import { formatBypassCode } from '../bypassCode';
 import { Checkbox, SectionPicker, SelectField, TextField } from '../fields';
 import { useRefs } from '../refs';
 
-const ROLE_LABEL: Record<Role, string> = { writer: 'Writer', editor: 'Section leader', admin: 'Admin', super_admin: 'Super admin' };
-const ROLE_BADGE: Record<Role, string> = { writer: '', editor: 'badge-navy', admin: 'badge-gold', super_admin: 'badge-gold' };
-const ROLE_ORDER: Role[] = ['writer', 'editor', 'admin', 'super_admin'];
+const ROLE_LABEL: Record<Role, string> = { writer: 'Writer', editor: 'Section leader', photographer: 'Photographer', admin: 'Admin', super_admin: 'Super admin' };
+const ROLE_BADGE: Record<Role, string> = { writer: '', editor: 'badge-navy', photographer: 'badge-navy', admin: 'badge-gold', super_admin: 'badge-gold' };
+const ROLE_ORDER: Role[] = ['writer', 'editor', 'photographer', 'admin', 'super_admin'];
+/** Roles with no sections of their own (they work across all of them). */
+const noSections = (r: Role) => isAdminRole(r) || r === 'photographer';
 /** Roles this person may hand out: only super admins can create or promote admin-level accounts. */
 const rolesFor = (isSuper: boolean) => ROLE_ORDER.filter((r) => isSuper || !isAdminRole(r));
 
@@ -64,7 +66,7 @@ export function People() {
         <button class="btn btn-primary" onClick={() => setEditing('new')}><Icon name="plus" size={16} /> Add account</button>
       </div>
       <div class="notice"><Icon name="info" /><div>
-        <strong>Roles.</strong> <em>Writers</em> draft and submit stories in their sections. <em>Section leaders</em> also review and publish stories, triage the tip line, and run polls and the scoreboard for their sections. <em>Admins</em> run the whole site — content, settings, writers and section leaders — and must use two-factor sign-in. <em>Super admins</em> can do all that and are the only ones who can create, change, disable or reset admin accounts (including other super admins).
+        <strong>Roles.</strong> <em>Writers</em> draft and submit stories in their sections. <em>Section leaders</em> also review and publish stories, triage the tip line, and run polls and the scoreboard for their sections. <em>Photographers</em> can see every story but change only its photos (cover photo, description, caption, credit) — never the writing. <em>Admins</em> run the whole site — content, settings, writers and section leaders — and must use two-factor sign-in. <em>Super admins</em> can do all that and are the only ones who can create, change, disable or reset admin accounts (including other super admins).
       </div></div>
       {error ? <ErrorNote error={error} /> : !rows ? <Loading /> : rows.length === 0 ? <Empty icon="users" title="No accounts yet" /> : (
         <div class="table-wrap">
@@ -77,7 +79,7 @@ export function People() {
                   <tr key={p.id} class={p.active ? '' : 'inactive'}>
                     <td><strong>{p.display_name || '—'}</strong>{p.id === me.userId && <span class="badge" style={{ marginLeft: '6px' }}>You</span>}<div class="small muted">{p.email}</div></td>
                     <td><span class={`badge ${ROLE_BADGE[p.role]}`}>{ROLE_LABEL[p.role]}</span>{!p.active && <span class="badge badge-bad" style={{ marginLeft: '6px' }}>Disabled</span>}</td>
-                    <td class="small">{isAdminRole(p.role) ? <span class="muted">All</span> : p.sections.map(sectionName).join(', ') || <span class="muted">None assigned</span>}</td>
+                    <td class="small">{noSections(p.role) ? <span class="muted">All</span> : p.sections.map(sectionName).join(', ') || <span class="muted">None assigned</span>}</td>
                     <td>{i ? <span class={`badge ${i.mfa ? 'badge-ok' : ''}`}>{i.mfa ? 'On' : 'Off'}</span> : '—'}{bypass[p.id] && <span class="badge badge-warn" style={{ marginLeft: '6px' }} title={`Expires ${new Date(bypass[p.id].expires_at).toLocaleString()}`}>Bypass code</span>}</td>
                     <td class="small nowrap">{i?.last_sign_in_at ? timeAgo(i.last_sign_in_at) : <span class="muted">Never</span>}</td>
                     <td class="col-actions"><button class="btn btn-sm" disabled={isAdminRole(p.role) && !me.isSuperAdmin && p.id !== me.userId} title={isAdminRole(p.role) && !me.isSuperAdmin && p.id !== me.userId ? 'Only super admins can manage admin accounts' : undefined} onClick={() => setEditing(p)}><Icon name="pencil" size={13} /> Manage</button></td>
@@ -158,7 +160,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
           hint={me.isSuperAdmin ? undefined : 'Only super admins can create admin accounts.'} />
         <SelectField label="Linked staff profile" value={staffId} onChange={setStaffId} hint="Lets them edit their own public bio."
           options={[{ value: '', label: '— none —' }, ...staff.map((s) => ({ value: s.id, label: s.name }))]} />
-        {!isAdminRole(role) && <SectionPicker class="full" label="Sections they can write for" value={secs} onChange={setSecs} sections={sections.filter((s) => s.active)} hint="Writers can only draft stories in these sections. Section leaders can also publish in them." />}
+        {!noSections(role) && <SectionPicker class="full" label="Sections they can write for" value={secs} onChange={setSecs} sections={sections.filter((s) => s.active)} hint="Writers can only draft stories in these sections. Section leaders can also publish in them." />}
         <p class="small muted full">A one-time temporary password is generated for you to hand over. {isAdminRole(role) ? 'Admin-level accounts will be asked to set up an authenticator app at first sign-in.' : ''}</p>
       </form>
     </Modal>
@@ -191,7 +193,7 @@ function EditModal({ person, isSelf, lastAdmin, bypass, onClose, onSaved, onCred
     try { await fn(); toast(ok, 'ok'); if (done) onSaved(); } catch (e) { toastError(e); } finally { setBusy(false); }
   }
   const save = (e: Event) => { e.preventDefault(); return run(async () => {
-    const res = await sessionClient().from('profiles').update({ display_name: name.trim(), role, sections: isAdminRole(role) ? [] : secs, staff_member_id: staffId || null }).eq('id', person.id).select('id');
+    const res = await sessionClient().from('profiles').update({ display_name: name.trim(), role, sections: noSections(role) ? [] : secs, staff_member_id: staffId || null }).eq('id', person.id).select('id');
     if (res.error) throw new Error(res.error.message);
     if (!res.data?.length) throw new Error('Nothing was saved.');
     if (active !== person.active) await adminUsers({ action: 'set_active', user_id: person.id, active });
@@ -223,7 +225,7 @@ function EditModal({ person, isSelf, lastAdmin, bypass, onClose, onSaved, onCred
           options={roleOptions.map((r) => ({ value: r, label: ROLE_LABEL[r] }))} />
         <SelectField label="Linked staff profile" value={staffId} onChange={setStaffId}
           options={[{ value: '', label: '— none —' }, ...staff.map((s) => ({ value: s.id, label: s.name }))]} />
-        {!isAdminRole(role) && <SectionPicker class="full" label="Sections" value={secs} onChange={setSecs} sections={sections.filter((s) => s.active)} />}
+        {!noSections(role) && <SectionPicker class="full" label="Sections" value={secs} onChange={setSecs} sections={sections.filter((s) => s.active)} />}
         <div class="full"><Checkbox label="Account enabled" checked={active} onChange={setActive} disabled={isSelf || lastAdmin} hint={isSelf || lastAdmin ? 'You can’t disable your own account or the last admin (or super admin).' : 'Disabled accounts can’t sign in. Their stories remain.'} /></div>
       </form>
       <hr class="rule" />

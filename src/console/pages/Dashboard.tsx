@@ -29,7 +29,7 @@ export function Dashboard({ admin = false }: { admin?: boolean }) {
     if (me.isEditor) countWhere('tips', 'status', 'new').then(setNewTips).catch(() => setNewTips(null));
   }, []);
 
-  const mine = (articles ?? []).filter((a) => me.isAdmin || a.created_by === me.userId || (me.isEditor && me.profile.sections.includes(a.section_id)));
+  const mine = (articles ?? []).filter((a) => me.isAdmin || me.isPhotographer || a.created_by === me.userId || (me.isEditor && me.profile.sections.includes(a.section_id)));
   const by = (s: string) => mine.filter((a) => a.status === s).length;
   const weekAgo = Date.now() - 7 * 864e5;
   const recent = mine.slice(0, 6);
@@ -40,11 +40,13 @@ export function Dashboard({ admin = false }: { admin?: boolean }) {
     <div class="stack" style={{ '--stack': '22px' }}>
       <div>
         <h1 class="page-title">{greeting}, {(me.profile.display_name || 'there').split(' ')[0]} 👋</h1>
-        <p class="muted">{admin ? 'Here’s the state of the newsroom.' : me.isEditor ? 'Here’s what’s on your desk.' : 'Ready to write something great?'}</p>
+        <p class="muted">{admin ? 'Here’s the state of the newsroom.' : me.isEditor ? 'Here’s what’s on your desk.' : me.isPhotographer ? 'Here are the stories that need pictures.' : 'Ready to write something great?'}</p>
       </div>
       <div class="stats">
         {me.isEditor && <Stat label="Waiting for review" value={articles ? by('submitted') : '…'} icon="inbox" to="/articles" tone="warn" />}
-        <Stat label="My drafts" value={articles ? mine.filter((a) => a.status === 'draft' && (a.created_by === me.userId || me.isEditor)).length : '…'} icon="pencil" to="/articles" />
+        {me.isPhotographer
+          ? <Stat label="Stories without a cover photo" value={articles ? mine.filter((a) => !a.cover_image_url && a.status !== 'archived').length : '…'} icon="camera" to="/articles" tone="warn" />
+          : <Stat label="My drafts" value={articles ? mine.filter((a) => a.status === 'draft' && (a.created_by === me.userId || me.isEditor)).length : '…'} icon="pencil" to="/articles" />}
         <Stat label="Published this week" value={articles ? mine.filter((a) => a.status === 'published' && a.published_at && new Date(a.published_at).getTime() > weekAgo).length : '…'} icon="newspaper" />
         {me.isEditor && <Stat label="New tips" value={newTips ?? '…'} icon="megaphone" to="/tips" tone="gold" />}
         {admin && <Stat label="Accounts" value={accounts ?? '…'} icon="users" to="/people" />}
@@ -52,7 +54,7 @@ export function Dashboard({ admin = false }: { admin?: boolean }) {
 
       <div class="dash-grid">
         <section class="card-box stack" style={{ '--stack': '12px' }}>
-          <div class="spread"><h2 class="h3">Recent stories</h2><a class="btn btn-sm btn-primary" href={href('/articles/new')}><Icon name="plus" size={14} /> New story</a></div>
+          <div class="spread"><h2 class="h3">Recent stories</h2>{!me.isPhotographer && <a class="btn btn-sm btn-primary" href={href('/articles/new')}><Icon name="plus" size={14} /> New story</a>}</div>
           {articles === null ? <p class="muted">Loading…</p> : recent.length === 0 ? <p class="muted">No stories yet — your first one is a click away.</p> : (
             <ul class="list">
               {recent.map((a) => (
@@ -68,12 +70,21 @@ export function Dashboard({ admin = false }: { admin?: boolean }) {
         </section>
         <section class="card-box stack" style={{ '--stack': '10px' }}>
           <h2 class="h3">Quick guide</h2>
+          {me.isPhotographer ? (
+            <ul class="ticks small">
+              <li><Icon name="check" size={14} /> <span>Open any story from <strong>Stories</strong> — the writing is read-only for you.</span></li>
+              <li><Icon name="check" size={14} /> <span>Upload a cover photo and write its description (alt text), caption and credit.</span></li>
+              <li><Icon name="check" size={14} /> <span>Use “Needs a cover photo” on the Stories page to find stories waiting for pictures.</span></li>
+              <li><Icon name="check" size={14} /> <span>You can update photos on published stories; the site shows the new ones straight away.</span></li>
+            </ul>
+          ) : (
           <ul class="ticks small">
             <li><Icon name="check" size={14} /> <span>Write in plain text — use <code>##</code> for subheads and <code>**bold**</code>.</span></li>
             <li><Icon name="check" size={14} /> <span>Add a cover photo with a description and credit.</span></li>
             <li><Icon name="check" size={14} /> <span>{me.isEditor ? 'Publish when ready — or schedule it for later.' : 'Submit for review when you’re done; your section leader will publish it.'}</span></li>
             <li><Icon name="check" size={14} /> <span>Fix something after publishing? Add an update notice so readers know.</span></li>
           </ul>
+          )}
         </section>
       </div>
     </div>

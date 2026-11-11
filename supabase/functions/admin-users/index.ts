@@ -26,7 +26,7 @@ class HttpError extends Error {
   }
 }
 
-const ROLES = ['writer', 'editor', 'admin', 'super_admin'];
+const ROLES = ['writer', 'editor', 'photographer', 'admin', 'super_admin'];
 const ADMIN_LEVEL = ['admin', 'super_admin'];   // only super admins may manage these accounts
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -145,7 +145,7 @@ Deno.serve(async (req: Request) => {
           throw new HttpError(400, /already|registered|exists/i.test(error?.message ?? '') ? 'An account with that email already exists.' : (error?.message ?? 'Could not create the account.'));
         }
         const { error: pErr } = await admin.from('profiles').insert({
-          id: data.user.id, email, display_name: name, role, sections: ADMIN_LEVEL.includes(role) ? [] : sections,
+          id: data.user.id, email, display_name: name, role, sections: ADMIN_LEVEL.includes(role) || role === 'photographer' ? [] : sections,   // photographers have no sections
           staff_member_id: staffId, active: true,
         });
         if (pErr) {

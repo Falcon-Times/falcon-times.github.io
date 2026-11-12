@@ -63,6 +63,8 @@ for every photo, and credit yourself.
   **Choose from gallery**; the photo's description, caption and credit fill in for you (you can still change them). In the
   text editor, the **camera button** inserts a gallery photo into the story body.
 - A story keeps its own copy, so removing a photo from the gallery never breaks a story that already uses it.
+- **Removing a photo also deletes its image file** — unless a story (cover or text), a portrait or another gallery
+  entry still uses it, in which case the file is kept and you're told so. That way unused uploads don't pile up in storage.
 
 ## Section-leader tools
 

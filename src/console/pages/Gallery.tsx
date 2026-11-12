@@ -81,9 +81,14 @@ function PhotoModal({ image, editable, onClose, onChanged }: { image: GalleryIma
     } catch (err) { toastError(err); setBusy(false); }
   }
   async function remove() {
-    if (!confirm('Remove this photo from the gallery? Stories that already use it keep their copy.')) return;
+    if (!confirm('Remove this photo from the gallery? Its file is deleted too, unless a story still uses it (stories keep their own copy).')) return;
     setBusy(true);
-    try { await deleteGalleryImage(image.id); toast('Photo removed', 'ok'); onChanged(); } catch (err) { toastError(err); setBusy(false); }
+    try {
+      const outcome = await deleteGalleryImage(image.id);
+      toast(outcome === 'kept-in-use' ? 'Removed from the gallery. A story still uses the file, so it was kept.'
+        : outcome === 'kept-other' ? 'Removed from the gallery. The file couldn’t be deleted, so it was kept.' : 'Photo and file removed', 'ok');
+      onChanged();
+    } catch (err) { toastError(err); setBusy(false); }
   }
 
   return (

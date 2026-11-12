@@ -39,6 +39,10 @@ tips, or hold sections (a table constraint), so they never count as writers.
 can read it; photographers, admins and the `photo-video` section leader can add rows; the uploader (or an admin /
 photo-video leader) can change or delete one, and a trigger fixes `uploaded_by` to the caller and the link to what it was.
 Stories copy the link and text when a photo is picked, so deleting a gallery row never touches a story.
+Removing a photo calls `delete_gallery_photo()`, which deletes the row and returns the file's storage path when nothing else uses it
+(`private.media_in_use`: a story's cover or text, a staff portrait, another gallery row); the app then removes the file through the
+Storage API, and the `media_delete` policy only allows that while the file is unused (admins may delete any file). Storage deletes
+need a SELECT policy too, so staff can read `media` records (`media_select`).
 
 A "section" is assigned to each person by an admin (`profiles.sections`). A writer for *Sports* cannot
 touch *School News*, even by crafting requests by hand — the database refuses.

@@ -213,10 +213,22 @@ export async function updateGalleryImage(id: string, details: GalleryDetails): P
   const res = await db().from('gallery_images').update(details).eq('id', id).select('*').single();
   return unwrap(res) as GalleryImage;
 }
-export async function deleteGalleryImage(id: string) {
-  const res = await db().from('gallery_images').delete().eq('id', id).select('id');
+/** What happened to the image file when a gallery photo was removed. */
+export type FileOutcome = 'removed' | 'kept-in-use' | 'kept-other';
+
+/**
+ * Removes a photo from the gallery, and deletes its image file too unless a story (or a portrait,
+ * or another gallery entry) still uses it. The database says whether the file is free to go and the
+ * storage policy enforces it, so a file a story shows is never deleted.
+ */
+export async function deleteGalleryImage(id: string): Promise<FileOutcome> {
+  const res = await db().rpc('delete_gallery_photo', { p_id: id });
   if (res.error) throw new Error(res.error.message);
-  if (!res.data?.length) throw new Error('You don’t have permission to remove this photo.');
+  const path = res.data as string | null;
+  if (!path) return 'kept-in-use';
+  const gone = await db().storage.from('media').remove([path]);
+  if (gone.error || !gone.data?.length) return 'kept-other';   // not allowed, or already gone: the photo is out of the gallery either way
+  return 'removed';
 }
 
 // ------------------------------------------------------- 2FA bypass codes

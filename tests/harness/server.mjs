@@ -162,6 +162,12 @@ const server = http.createServer(async (req, res) => {
       return o ? send(res, 200, o.data, { 'content-type': o.type }) : err(res, 404, 'not found');
     }
     if (path === '/storage/v1/object/list/media' && req.method === 'POST') return send(res, 200, []);
+    if (path === '/storage/v1/object/media' && req.method === 'DELETE') {   // supabase-js storage.remove(paths)
+      if (!claims(req) || claims(req).role !== 'authenticated') return err(res, 401, 'unauthorized');
+      const { prefixes = [] } = JSON.parse((await readBody(req)).toString() || '{}');
+      const gone = prefixes.filter((p) => objects.delete(`media/${p}`));
+      return send(res, 200, gone.map((name) => ({ name, bucket_id: 'media' })));
+    }
     if (path.startsWith('/storage/v1/object/') && req.method === 'POST') {
       if (!claims(req) || claims(req).role !== 'authenticated') return err(res, 401, 'unauthorized');
       const raw = await readBody(req);
@@ -301,6 +307,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { id: u.id });
     }
     if (path === '/__test/health') return send(res, 200, { ok: true });
+    if (path === '/__test/objects') return send(res, 200, [...objects.keys()]);   // keys of stored files, e.g. media/<user>/2026/<id>.webp
     if (path === '/__test/anon-key') return send(res, 200, Buffer.from(ANON_KEY));
     return err(res, 404, `no route for ${req.method} ${path}`);
   } catch (e) {

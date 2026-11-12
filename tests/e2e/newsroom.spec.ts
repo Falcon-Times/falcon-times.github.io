@@ -455,6 +455,54 @@ test('photographers fill a shared gallery, and writers pick from it for a story'
   await writer.context().close();
 });
 
+test('removing a gallery photo deletes its file only when no story uses it', async ({ browser }) => {
+  const objects = async (): Promise<string[]> => (await fetch('http://127.0.0.1:54330/__test/objects')).json();
+  const keyOf = (url: string) => url.split('/object/public/')[1];
+  const photog = await newPage(browser);
+  photog.on('dialog', (d) => d.accept());
+  await signIn(photog, '/newsroom/#/gallery', PHOTO.email, PHOTO.password);
+  await expect(photog.getByRole('heading', { name: 'Photo gallery' })).toBeVisible();
+  await expect(photog.getByRole('list', { name: 'Photos' }).getByRole('button')).toHaveCount(2);
+
+  // A third photo that no story ever uses.
+  const before = await objects();
+  await photog.getByRole('button', { name: 'Upload photos' }).click();
+  await photog.getByRole('dialog', { name: 'Upload photos' }).locator('input[type=file]').setInputFiles({ name: 'unused-shot.png', mimeType: 'image/png', buffer: twoTonePng(200, 200) });
+  await photog.getByRole('button', { name: 'Upload 1 photo' }).click();
+  await expect(photog.getByText('Photo added')).toBeVisible();
+  const unusedKey = (await objects()).find((k) => !before.includes(k))!;
+  expect(unusedKey).toBeTruthy();
+
+  const c = db(); await c.connect();
+  const urlOf = async (title: string) => (await c.query('select url from public.gallery_images where title = $1', [title])).rows[0].url as string;
+  const coverKey = keyOf(await urlOf('homecoming parade'));   // the cover of the writer's story
+  const bodyKey = keyOf(await urlOf('football kickoff'));     // inside that story's text
+  expect(await objects()).toEqual(expect.arrayContaining([unusedKey, coverKey, bodyKey]));
+
+  // Unused: removed from the gallery and its file deleted.
+  await photog.getByRole('button', { name: /unused shot/ }).click();
+  await photog.getByRole('button', { name: 'Remove' }).click();
+  await expect(photog.getByText('Photo and file removed')).toBeVisible();
+  expect(await objects()).not.toContain(unusedKey);
+
+  // Used as a story's cover: out of the gallery, but the file stays so the story still shows it.
+  await photog.getByRole('button', { name: /homecoming parade/ }).click();
+  await photog.getByRole('button', { name: 'Remove' }).click();
+  await expect(photog.getByText('A story still uses the file, so it was kept')).toBeVisible();
+  expect(await objects()).toContain(coverKey);
+
+  // Used inside a story's text: same.
+  await photog.getByRole('button', { name: /football kickoff/ }).click();
+  await photog.getByRole('button', { name: 'Remove' }).click();
+  await expect(photog.getByText('A story still uses the file, so it was kept').last()).toBeVisible();
+  expect(await objects()).toContain(bodyKey);
+  await expect(photog.getByText('No photos yet')).toBeVisible();
+  const { rows: [story] } = await c.query('select cover_image_url from public.articles where title = $1', [`Gallery story ${stamp}`]);
+  await c.end();
+  expect(keyOf(story.cover_image_url)).toBe(coverKey); // the story still points at the surviving file
+  await photog.context().close();
+});
+
 test('admin sees the audit trail and can change a site setting', async () => {
   await admin.goto('/admin/#/activity');
   const row = admin.getByRole('row', { name: new RegExp(`created writer account ${WRITER.email}`) });

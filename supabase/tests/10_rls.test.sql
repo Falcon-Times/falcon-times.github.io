@@ -491,6 +491,133 @@ select tests.affects($$update public.articles set image_alt = 'writer edit' wher
 select tests.logout();
 drop table photog_before;
 
+-- ------------------------------------------------------------ photo gallery
+select tests.logout();
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-000000000041', 'photo.editor@example.test'),
+  ('00000000-0000-0000-0000-000000000042', 'photog2@example.test');
+insert into public.profiles (id, email, display_name, role, sections, active) values
+  ('00000000-0000-0000-0000-000000000041', 'photo.editor@example.test', 'Photo Lead', 'editor', '{photo-video}', true),
+  ('00000000-0000-0000-0000-000000000042', 'photog2@example.test', 'Second Photog', 'photographer', '{}', true);
+
+select tests.anon();
+select tests.fails('select * from public.gallery_images', 'anon cannot read the gallery', 'permission denied');
+select tests.fails($$insert into public.gallery_images (url) values ('https://img.test/x.webp')$$, 'anon cannot add to it', 'permission denied');
+
+-- a photographer adds photos with no story involved
+select tests.login('00000000-0000-0000-0000-000000000031');
+insert into public.gallery_images (url, title, alt_text, caption, credit, tags, uploaded_by)
+  values ('https://img.test/g1.webp', 'Homecoming parade', 'Floats on the main road', 'The parade', 'Pat Photog', '{homecoming}', '00000000-0000-0000-0000-000000000004');
+select tests.eq((select uploaded_by from public.gallery_images where title = 'Homecoming parade'), '00000000-0000-0000-0000-000000000031'::uuid, 'the uploader is always the caller, even if the request says otherwise');
+select tests.fails($$insert into public.gallery_images (url) values ('javascript:alert(1)')$$, 'a gallery link must be http(s)', 'violates check constraint');
+update public.gallery_images set title = 'Parade 2026', caption = 'Seniors lead the way', tags = '{homecoming,parade}', url = 'https://evil.test/x.webp'
+  where title = 'Homecoming parade';
+select tests.eq((select url from public.gallery_images where title = 'Parade 2026'), 'https://img.test/g1.webp', 'a photographer edits their photo''s details but never its link');
+select tests.eq((select caption from public.gallery_images where title = 'Parade 2026'), 'Seniors lead the way', 'details do change');
+select tests.eq((select updated_at is not null from public.gallery_images where title = 'Parade 2026'), true, 'and updated_at is stamped');
+
+-- everyone on staff can read it; only the right people can add or change
+select tests.login('00000000-0000-0000-0000-000000000004');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 1::bigint, 'a writer can browse the gallery');
+select tests.fails($$insert into public.gallery_images (url) values ('https://img.test/w.webp')$$, 'but not add to it', 'row-level security');
+select tests.affects($$update public.gallery_images set title = 'mine now'$$, 0, 'nor edit it');
+select tests.affects($$delete from public.gallery_images$$, 0, 'nor delete from it');
+select tests.login('00000000-0000-0000-0000-000000000002');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 1::bigint, 'a section leader elsewhere can browse it');
+select tests.fails($$insert into public.gallery_images (url) values ('https://img.test/e.webp')$$, 'but cannot add to it', 'row-level security');
+select tests.login('00000000-0000-0000-0000-000000000006');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 0::bigint, 'a user without a profile sees nothing');
+
+-- another photographer can see it but not change a colleague's photo
+select tests.login('00000000-0000-0000-0000-000000000042');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 1::bigint, 'photographers see each other''s photos');
+select tests.affects($$update public.gallery_images set title = 'taken over'$$, 0, 'but cannot change them');
+select tests.affects($$delete from public.gallery_images$$, 0, 'or delete them');
+insert into public.gallery_images (url, title) values ('https://img.test/g2.webp', 'Second shoot');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 2::bigint, 'and add their own');
+
+-- the Photography + Video section leader and admins manage every photo
+select tests.login('00000000-0000-0000-0000-000000000041');
+update public.gallery_images set credit = 'Fixed credit' where title = 'Parade 2026';
+select tests.eq((select credit from public.gallery_images where title = 'Parade 2026'), 'Fixed credit', 'the photography section leader can edit anyone''s photo');
+insert into public.gallery_images (url, title) values ('https://img.test/g3.webp', 'Leader upload');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 3::bigint, 'and add photos');
+select tests.login('00000000-0000-0000-0000-000000000001', 'aal2');
+select tests.eq(tests.count($$select 1 from public.audit_log where table_name = 'gallery_images'$$) >= 3, true, 'gallery changes are in the audit trail');
+delete from public.gallery_images where title = 'Leader upload';
+select tests.eq(tests.count('select 1 from public.gallery_images'), 2::bigint, 'an admin can delete any photo');
+select tests.login('00000000-0000-0000-0000-000000000001', 'aal1');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 0::bigint, 'an admin without 2FA gets nothing');
+select tests.login('00000000-0000-0000-0000-000000000031');
+delete from public.gallery_images where title = 'Parade 2026';
+select tests.eq(tests.count('select 1 from public.gallery_images'), 1::bigint, 'a photographer can delete their own photo');
+select tests.logout();
+delete from public.gallery_images;
+
+-- ------------------------------------------------------------ gallery photo clean-up
+select tests.logout();
+insert into storage.objects (bucket_id, name, owner) values
+  ('media', 'w/used-cover.webp', '00000000-0000-0000-0000-000000000004'),
+  ('media', 'w/used-body.webp',  '00000000-0000-0000-0000-000000000004'),
+  ('media', 'w/unused.webp',     '00000000-0000-0000-0000-000000000004'),
+  ('media', 'w/unused-2.webp',   '00000000-0000-0000-0000-000000000004'),
+  ('media', 'p/in-gallery.webp', '00000000-0000-0000-0000-000000000031'),
+  ('media', 'p/gallery-and-story.webp', '00000000-0000-0000-0000-000000000031'),
+  ('media', 'p/orphan.webp',     '00000000-0000-0000-0000-000000000031');
+insert into public.articles (slug, title, section_id, status, created_by, cover_image_url, body_md) values
+  ('cleanup-cover', 'Cleanup cover', 'school-news', 'draft', '00000000-0000-0000-0000-000000000004',
+   'https://x.test/storage/v1/object/public/media/w/used-cover.webp', 'text'),
+  ('cleanup-body', 'Cleanup body', 'school-news', 'draft', '00000000-0000-0000-0000-000000000004',
+   null, 'See ![pic](https://x.test/storage/v1/object/public/media/w/used-body.webp) here'),
+  ('cleanup-gallery', 'Cleanup gallery', 'school-news', 'published', '00000000-0000-0000-0000-000000000004',
+   'https://x.test/storage/v1/object/public/media/p/gallery-and-story.webp', 'text');
+insert into public.gallery_images (url, title, uploaded_by) values
+  ('https://x.test/storage/v1/object/public/media/p/in-gallery.webp', 'In gallery', '00000000-0000-0000-0000-000000000031'),
+  ('https://x.test/storage/v1/object/public/media/p/gallery-and-story.webp', 'Also in a story', '00000000-0000-0000-0000-000000000031');
+
+-- what counts as "in use"
+select tests.login('00000000-0000-0000-0000-000000000004');
+select tests.eq(private.media_in_use('w/used-cover.webp'), true, 'a story''s cover photo is in use');
+select tests.eq(private.media_in_use('w/used-body.webp'), true, 'so is a photo inside a story''s text');
+select tests.eq(private.media_in_use('p/in-gallery.webp'), true, 'so is a photo that is in the gallery');
+select tests.eq(private.media_in_use('w/unused.webp'), false, 'a file nothing links to is not');
+select tests.eq(private.media_in_use('nope/missing.webp'), false, 'neither is a path that does not exist');
+select tests.eq(private.media_path('https://x.test/storage/v1/object/public/media/p/a/b.webp'), 'p/a/b.webp', 'the storage path comes from the public link');
+select tests.eq(private.media_path('https://elsewhere.test/pic.jpg'), null, 'links to other sites have no storage path');
+
+-- files can't be deleted while used, by anyone but an admin
+select tests.affects($$delete from storage.objects where name = 'w/used-cover.webp'$$, 0, 'an uploader cannot delete a file their story''s cover uses');
+select tests.affects($$delete from storage.objects where name = 'w/used-body.webp'$$, 0, 'nor one used in the story text');
+select tests.affects($$delete from storage.objects where name = 'p/orphan.webp'$$, 0, 'and not someone else''s file');
+select tests.affects($$delete from storage.objects where name = 'w/unused.webp'$$, 1, 'but can delete their own unused file');
+select tests.login('00000000-0000-0000-0000-000000000002');
+select tests.affects($$delete from storage.objects where name = 'w/unused-2.webp'$$, 0, 'a section leader elsewhere cannot delete others'' files');
+select tests.login('00000000-0000-0000-0000-000000000041');
+select tests.affects($$delete from storage.objects where name = 'w/used-cover.webp'$$, 0, 'the photography leader cannot delete a used file either');
+select tests.affects($$delete from storage.objects where name = 'w/unused-2.webp'$$, 1, 'but can delete an unused one');
+select tests.login('00000000-0000-0000-0000-000000000001', 'aal2');
+select tests.affects($$delete from storage.objects where name = 'w/used-body.webp'$$, 1, 'an admin can delete any file on purpose');
+select tests.login('00000000-0000-0000-0000-000000000001', 'aal1');
+select tests.affects($$delete from storage.objects where name = 'p/orphan.webp'$$, 0, 'but only with 2FA');
+
+-- removing a gallery photo
+select tests.login('00000000-0000-0000-0000-000000000004');
+select tests.fails($$select public.delete_gallery_photo((select id from public.gallery_images where title = 'In gallery'))$$, 'a writer cannot remove gallery photos', 'permission to remove');
+select tests.login('00000000-0000-0000-0000-000000000042');
+select tests.fails($$select public.delete_gallery_photo((select id from public.gallery_images where title = 'In gallery'))$$, 'nor can another photographer', 'permission to remove');
+select tests.login('00000000-0000-0000-0000-000000000031');
+select tests.eq(tests.count($$select 1 from storage.objects where name = 'p/in-gallery.webp'$$), 1::bigint, 'staff can see the media file records');
+select tests.anon();
+select tests.fails('select 1 from storage.objects', 'but the public cannot list them', 'permission denied');
+select tests.login('00000000-0000-0000-0000-000000000031');
+select tests.affects($$delete from storage.objects where name = 'p/in-gallery.webp'$$, 0, 'a file cannot be deleted while a gallery entry points at it');
+select tests.eq(public.delete_gallery_photo((select id from public.gallery_images where title = 'In gallery')), 'p/in-gallery.webp', 'removing an unused photo hands back its file to delete');
+select tests.affects($$delete from storage.objects where name = 'p/in-gallery.webp'$$, 1, 'and now the file can go');
+select tests.eq(public.delete_gallery_photo((select id from public.gallery_images where title = 'Also in a story')), null, 'a photo a story still uses is removed from the gallery but its file is kept');
+select tests.affects($$delete from storage.objects where name = 'p/gallery-and-story.webp'$$, 0, 'and the file cannot be deleted');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 0::bigint, 'both gallery entries are gone');
+select tests.logout();
+
 -- ------------------------------------------------------------ server-side invariants
 select tests.logout();
 select tests.eq((select created_at > now() - interval '1 minute' from public.tips order by created_at desc limit 1), true, 'tip timestamps are server-controlled');

@@ -9,11 +9,13 @@ import { Articles } from '@/console/pages/Articles';
 import { Profile, Security } from '@/console/pages/Account';
 import { Notices, Polls, Quotes, Scoreboard } from '@/console/pages/Content';
 import { Dashboard } from '@/console/pages/Dashboard';
+import { Gallery } from '@/console/pages/Gallery';
 import { Tips } from '@/console/pages/Tips';
 
 const nav: NavItem[] = [
   { path: '/', label: 'Dashboard', icon: 'home' },
   { path: '/articles', label: 'Stories', icon: 'file' },
+  { path: '/gallery', label: 'Photo gallery', icon: 'camera' },
   { path: '/tips', label: 'Tip line', icon: 'megaphone', show: (me) => me.isEditor, group: 'Section leaders' },
   { path: '/scoreboard', label: 'Scoreboard', icon: 'trophy', show: (me) => me.isEditor, group: 'Section leaders' },
   { path: '/polls', label: 'Polls', icon: 'chart', show: (me) => me.isEditor, group: 'Section leaders' },
@@ -29,6 +31,7 @@ const routes: RouteDef[] = [
   { pattern: '/articles', render: () => <Articles /> },
   { pattern: '/articles/new', render: () => <ArticleEditor id={null} /> },
   { pattern: '/articles/:id', render: (p) => <ArticleEditor key={p.id} id={p.id} /> },
+  { pattern: '/gallery', render: () => <Gallery /> },
   { pattern: '/tips', render: () => <Tips />, show: editorsOnly },
   { pattern: '/scoreboard', render: () => <Scoreboard />, show: editorsOnly },
   { pattern: '/polls', render: () => <Polls />, show: editorsOnly },

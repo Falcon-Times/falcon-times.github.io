@@ -3,7 +3,7 @@
 import { sessionClient, unwrap } from '@/lib/supabase';
 import { slugify } from '@/lib/format';
 import type {
-  Article, ArticleComment, ArticleStatus, AuditEntry, Game, Poll, Profile, Section, StaffMember, Tip,
+  Article, ArticleComment, ArticleStatus, AuditEntry, Game, GalleryImage, Poll, Profile, Section, StaffMember, Tip,
 } from '@/lib/types';
 
 const db = () => sessionClient();
@@ -195,6 +195,40 @@ export async function adminUsers<T = unknown>(body: AdminCall): Promise<T> {
   }
   if (data?.error) throw new Error(data.error);
   return data as T;
+}
+
+// ------------------------------------------------------------- photo gallery
+export type NewGalleryImage = Pick<GalleryImage, 'url' | 'title' | 'alt_text' | 'caption' | 'credit' | 'tags'>;
+export type GalleryDetails = Pick<GalleryImage, 'title' | 'alt_text' | 'caption' | 'credit' | 'tags'>;
+
+export async function listGallery(): Promise<GalleryImage[]> {
+  const res = await db().from('gallery_images').select('*').order('created_at', { ascending: false }).limit(1000);
+  return unwrap(res) as GalleryImage[];
+}
+export async function addGalleryImages(rows: NewGalleryImage[]): Promise<GalleryImage[]> {
+  const res = await db().from('gallery_images').insert(rows).select('*');
+  return unwrap(res) as GalleryImage[];
+}
+export async function updateGalleryImage(id: string, details: GalleryDetails): Promise<GalleryImage> {
+  const res = await db().from('gallery_images').update(details).eq('id', id).select('*').single();
+  return unwrap(res) as GalleryImage;
+}
+/** What happened to the image file when a gallery photo was removed. */
+export type FileOutcome = 'removed' | 'kept-in-use' | 'kept-other';
+
+/**
+ * Removes a photo from the gallery, and deletes its image file too unless a story (or a portrait,
+ * or another gallery entry) still uses it. The database says whether the file is free to go and the
+ * storage policy enforces it, so a file a story shows is never deleted.
+ */
+export async function deleteGalleryImage(id: string): Promise<FileOutcome> {
+  const res = await db().rpc('delete_gallery_photo', { p_id: id });
+  if (res.error) throw new Error(res.error.message);
+  const path = res.data as string | null;
+  if (!path) return 'kept-in-use';
+  const gone = await db().storage.from('media').remove([path]);
+  if (gone.error || !gone.data?.length) return 'kept-other';   // not allowed, or already gone: the photo is out of the gallery either way
+  return 'removed';
 }
 
 // ------------------------------------------------------- 2FA bypass codes

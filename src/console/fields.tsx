@@ -1,11 +1,12 @@
 import { useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { checkImageFile, uploadBlob, uploadImage } from '@/lib/images';
-import type { Section } from '@/lib/types';
+import type { GalleryImage, Section } from '@/lib/types';
 import { Icon } from '@/ui/Icon';
 import { toastError } from '@/ui/Toast';
 import { useMe } from './auth';
 import { CropModal } from './CropModal';
+import { GalleryPicker } from './GalleryPicker';
 
 type Change<T> = (v: T) => void;
 export const newOption = () => ({ id: `o${crypto.randomUUID().slice(0, 8)}`, label: '' });
@@ -108,13 +109,16 @@ export function SectionPicker({ label, value, onChange, sections, hint, class: c
 export type ImageShape = 'portrait' | 'cover';
 
 /** Image upload control; stores a public URL. */
-export function ImageField({ label, value, onChange, hint, class: cls, shape }: {
+export function ImageField({ label, value, onChange, hint, class: cls, shape, onPickGallery }: {
   label: string; value: string | null; onChange: Change<string | null>; hint?: string; class?: string; shape?: ImageShape;
+  /** Offer "Choose from gallery"; called with the photo the person picks from the shared gallery. */
+  onPickGallery?: (image: GalleryImage) => void;
 }) {
   const { userId } = useMe();
   const [busy, setBusy] = useState(false);
   const [cropping, setCropping] = useState<File | null>(null);
   const [source, setSource] = useState<File | null>(null);   // the file chosen this session, so it can be re-framed
+  const [picking, setPicking] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   async function pick(e: Event) {
     const file = (e.target as HTMLInputElement).files?.[0];
@@ -143,6 +147,7 @@ export function ImageField({ label, value, onChange, hint, class: cls, shape }: 
           <button type="button" class="btn btn-sm" disabled={busy} onClick={() => input.current?.click()}>
             <Icon name={busy ? 'loader' : 'upload'} class={busy ? 'spinner' : ''} size={14} /> {busy ? 'Uploading…' : value ? 'Replace' : 'Upload'}
           </button>
+          {onPickGallery && <button type="button" class="btn btn-sm" disabled={busy} onClick={() => setPicking(true)}><Icon name="camera" size={14} /> Choose from gallery</button>}
           {shape === 'portrait' && source && <button type="button" class="btn btn-sm" disabled={busy} onClick={() => setCropping(source)}><Icon name="pencil" size={14} /> Adjust</button>}
           {value && <button type="button" class="btn btn-sm btn-ghost" onClick={() => { onChange(null); setSource(null); }}><Icon name="x" size={14} /> Remove</button>}
         </div>
@@ -157,6 +162,7 @@ export function ImageField({ label, value, onChange, hint, class: cls, shape }: 
         <p class="hint">The site shows the middle of your photo in these frames, so keep the main subject near the centre.</p>
       )}
       {hint && <span class="hint">{hint}</span>}
+      {picking && onPickGallery && <GalleryPicker onClose={() => setPicking(false)} onPick={(g) => { setPicking(false); onPickGallery(g); }} />}
       {cropping && <CropModal file={cropping} onCancel={() => setCropping(null)} onDone={cropped} />}
     </div>
   );

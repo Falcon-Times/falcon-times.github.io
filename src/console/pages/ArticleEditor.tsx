@@ -4,12 +4,13 @@ import { uploadImage } from '@/lib/images';
 import { renderMarkdown } from '@/lib/markdown';
 import { href, navigate } from '@/lib/router';
 import { safeStorage } from '@/lib/store';
-import type { Article, ArticleComment } from '@/lib/types';
+import type { Article, ArticleComment, GalleryImage } from '@/lib/types';
 import { Icon } from '@/ui/Icon';
 import { ErrorNote, Loading } from '@/ui/States';
 import { toast, toastError } from '@/ui/Toast';
 import { addComment, deleteArticle, getArticle, listComments, saveArticle, saveArticleImages, type ArticleInput } from '../api';
 import { useMe } from '../auth';
+import { GalleryPicker } from '../GalleryPicker';
 import { Checkbox, ImageField, SelectField, TagsField, TextArea, TextField } from '../fields';
 import { useRefs } from '../refs';
 import { STATUS_BADGE, STATUS_LABEL } from './Articles';
@@ -88,6 +89,10 @@ export function ArticleEditor({ id }: { id: string | null }) {
   const locked = !isNew && (form.status === 'published' || form.status === 'archived') && !editorial && !imagesOnly;
   const frozen = locked || imagesOnly;                    // the writing is read-only
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => { setForm((f) => (f ? { ...f, [k]: v } : f)); setDirty(true); };
+  // A gallery photo fills the cover and its description, caption and credit (all still editable).
+  const pickFromGallery = (g: GalleryImage) => {
+    set('cover_image_url', g.url); set('image_alt', g.alt_text); set('image_caption', g.caption); set('photo_credit', g.credit);
+  };
   const section = sections.find((s) => s.id === form.section_id);
   const sectionOptions = (editorial || isNew ? mySections : sections.filter((s) => s.id === form.section_id)).map((s) => ({ value: s.id, label: s.name }));
   if (!sectionOptions.some((o) => o.value === form.section_id) && form.section_id) {
@@ -273,7 +278,7 @@ export function ArticleEditor({ id }: { id: string | null }) {
 
           <section class="side-box stack" style={{ '--stack': '10px' }}>
             <h2 class="side-h">Cover photo</h2>
-            <ImageField label="Photo" shape="cover" value={form.cover_image_url} onChange={(v) => set('cover_image_url', v)} hint="Use original, high-resolution photos (we resize big ones automatically)." />
+            <ImageField label="Photo" shape="cover" value={form.cover_image_url} onChange={(v) => set('cover_image_url', v)} onPickGallery={pickFromGallery} hint="Use original, high-resolution photos (we resize big ones automatically)." />
             <TextField label="Description (alt text)" value={form.image_alt} max={300} onChange={(v) => set('image_alt', v)} hint="Describe the photo for readers who can’t see it." />
             <TextField label="Caption" value={form.image_caption} max={500} onChange={(v) => set('image_caption', v)} />
             <TextField label="Photo credit" value={form.photo_credit} max={200} onChange={(v) => set('photo_credit', v)} placeholder="Photographer’s name" />
@@ -294,6 +299,7 @@ function MarkdownEditor({ value, onChange, disabled, userId }: { value: string; 
   const ref = useRef<HTMLTextAreaElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   function edit(fn: (sel: string, before: string, after: string) => { text: string; selStart?: number; selEnd?: number }) {
     const el = ref.current;
@@ -349,9 +355,14 @@ function MarkdownEditor({ value, onChange, disabled, userId }: { value: string; 
         <button type="button" class="btn btn-sm btn-ghost" title="Numbered list" onClick={linePrefix('1. ')} disabled={disabled}><Icon name="list-ordered" size={15} /></button>
         <button type="button" class="btn btn-sm btn-ghost" title="Link" onClick={link} disabled={disabled}><Icon name="link" size={15} /></button>
         <button type="button" class="btn btn-sm btn-ghost" title="Insert photo" onClick={() => file.current?.click()} disabled={disabled || uploading}><Icon name={uploading ? 'loader' : 'image-plus'} class={uploading ? 'spinner' : ''} size={15} /></button>
+        <button type="button" class="btn btn-sm btn-ghost" title="Insert photo from the gallery" onClick={() => setPicking(true)} disabled={disabled}><Icon name="camera" size={15} /></button>
         <button type="button" class="btn btn-sm btn-ghost" title="Embed YouTube video" onClick={video} disabled={disabled}><Icon name="video" size={15} /></button>
         <input ref={file} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={onFile} />
       </div>
+      {picking && <GalleryPicker onClose={() => setPicking(false)} onPick={(g) => {
+        setPicking(false);
+        edit((_s, before, after) => ({ text: `${before}${before && !before.endsWith('\n') ? '\n\n' : ''}![${g.alt_text || g.title}](${g.url})\n\n${after}` }));
+      }} />}
       <textarea ref={ref} class="md-input" value={value} disabled={disabled} spellcheck rows={22} onPaste={onPaste}
         placeholder={'Start writing…\n\nTip: use ## for subheadings, **bold**, and paste a YouTube link on its own line to embed a video.'}
         onInput={(e) => onChange((e.target as HTMLTextAreaElement).value)} aria-label="Story text" />

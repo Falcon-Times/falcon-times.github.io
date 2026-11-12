@@ -79,6 +79,19 @@ export interface ArticleComment {
   created_at: string;
 }
 
+export interface GalleryImage {
+  id: string;
+  url: string;
+  title: string;
+  alt_text: string;     // description for readers who can't see the photo
+  caption: string;
+  credit: string;
+  tags: string[];
+  uploaded_by: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
 export interface Tip {
   id: string;
   category: TipCategory;

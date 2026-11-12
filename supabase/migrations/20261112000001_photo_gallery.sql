@@ -9,7 +9,7 @@
 --   * add:    photographers, admins, and section leaders of "photo-video"
 --   * change: the uploader, admins, and section leaders of "photo-video"
 --             (title, description, caption, credit and tags; never the photo link itself)
---   * delete: same as change. The image file stays in storage, so stories that already use it are fine.
+--   * delete: same as change. The file is cleaned up by the next migration (only when nothing uses it).
 --
 -- The files themselves live in the existing public "media" bucket, which every staff role can upload to.
 

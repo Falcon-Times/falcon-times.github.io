@@ -52,6 +52,18 @@ find stories waiting for pictures, add the photo, and press **Save photos**. You
 too; the live site shows the new ones straight away (no “Updated” notice is added). Write a good description
 for every photo, and credit yourself.
 
+## The photo gallery
+
+**Photo gallery** (in the menu) is a shared library of photos from the photography team.
+
+- **Photographers** (and admins, and the Photography + Video section leader) press **Upload photos**, choose any number
+  of files, and fill in the credit, tags, and a title and description (alt text) for each. No story is needed first.
+  Click a photo to change its details later; photographers can edit and remove only their own.
+- **Everyone else** can browse and search the gallery. When you add a **cover photo** to a story, choose
+  **Choose from gallery**; the photo's description, caption and credit fill in for you (you can still change them). In the
+  text editor, the **camera button** inserts a gallery photo into the story body.
+- A story keeps its own copy, so removing a photo from the gallery never breaks a story that already uses it.
+
 ## Section-leader tools
 
 | Tool | Use it for |

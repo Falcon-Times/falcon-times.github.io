@@ -151,3 +151,19 @@ input[type='range'] { width: 100%; accent-color: var(--navy); }
 .cover-previews figure { margin: 0; flex: 1 1 0; min-width: 0; display: grid; gap: 4px; }
 .cover-previews figure > div { overflow: hidden; border-radius: var(--radius-sm); border: 1px solid var(--rule); background: var(--surface-2); }
 .cover-previews img { width: 100%; height: 100%; object-fit: cover; display: block; border: 0; }
+
+/* Photo gallery */
+.gallery-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
+.gallery-card { all: unset; box-sizing: border-box; display: grid; gap: 8px; width: 100%; cursor: pointer; border-radius: var(--radius); padding: 6px; transition: background 0.15s; }
+.gallery-card:hover { background: var(--surface-2); }
+.gallery-card:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+.gallery-thumb { display: block; aspect-ratio: 4 / 3; overflow: hidden; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--rule); }
+.gallery-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gallery-meta { display: grid; gap: 2px; min-width: 0; }
+.gallery-meta strong, .gallery-meta .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gallery-detail { display: grid; gap: 18px; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 760px) { .gallery-detail { grid-template-columns: 1fr; } }
+.gallery-detail > img { width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--rule); background: var(--surface-2); max-height: 60vh; object-fit: contain; }
+.upload-rows { display: grid; gap: 12px; }
+.upload-row { display: grid; gap: 12px; grid-template-columns: 96px 1fr; align-items: start; padding: 10px; border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--surface-2); }
+.upload-row img { width: 96px; height: 72px; object-fit: cover; border-radius: var(--radius-sm); }

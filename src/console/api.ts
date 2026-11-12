@@ -3,7 +3,7 @@
 import { sessionClient, unwrap } from '@/lib/supabase';
 import { slugify } from '@/lib/format';
 import type {
-  Article, ArticleComment, ArticleStatus, AuditEntry, Game, Poll, Profile, Section, StaffMember, Tip,
+  Article, ArticleComment, ArticleStatus, AuditEntry, Game, GalleryImage, Poll, Profile, Section, StaffMember, Tip,
 } from '@/lib/types';
 
 const db = () => sessionClient();
@@ -195,6 +195,28 @@ export async function adminUsers<T = unknown>(body: AdminCall): Promise<T> {
   }
   if (data?.error) throw new Error(data.error);
   return data as T;
+}
+
+// ------------------------------------------------------------- photo gallery
+export type NewGalleryImage = Pick<GalleryImage, 'url' | 'title' | 'alt_text' | 'caption' | 'credit' | 'tags'>;
+export type GalleryDetails = Pick<GalleryImage, 'title' | 'alt_text' | 'caption' | 'credit' | 'tags'>;
+
+export async function listGallery(): Promise<GalleryImage[]> {
+  const res = await db().from('gallery_images').select('*').order('created_at', { ascending: false }).limit(1000);
+  return unwrap(res) as GalleryImage[];
+}
+export async function addGalleryImages(rows: NewGalleryImage[]): Promise<GalleryImage[]> {
+  const res = await db().from('gallery_images').insert(rows).select('*');
+  return unwrap(res) as GalleryImage[];
+}
+export async function updateGalleryImage(id: string, details: GalleryDetails): Promise<GalleryImage> {
+  const res = await db().from('gallery_images').update(details).eq('id', id).select('*').single();
+  return unwrap(res) as GalleryImage;
+}
+export async function deleteGalleryImage(id: string) {
+  const res = await db().from('gallery_images').delete().eq('id', id).select('id');
+  if (res.error) throw new Error(res.error.message);
+  if (!res.data?.length) throw new Error('You don’t have permission to remove this photo.');
 }
 
 // ------------------------------------------------------- 2FA bypass codes

@@ -387,6 +387,74 @@ test('a photographer sees every story but can only change its photos', async ({ 
   await page.context().close();
 });
 
+test('photographers fill a shared gallery, and writers pick from it for a story', async ({ browser }) => {
+  // A photographer uploads two photos — no story needed.
+  const photog = await newPage(browser);
+  await signIn(photog, '/newsroom/#/gallery', PHOTO.email, PHOTO.password);
+  await expect(photog.getByRole('heading', { name: 'Photo gallery' })).toBeVisible();
+  await expect(photog.getByText('No photos yet')).toBeVisible();
+  await photog.getByRole('button', { name: 'Upload photos' }).click();
+  const upload = photog.getByRole('dialog', { name: 'Upload photos' });
+  await upload.locator('input[type=file]').setInputFiles([
+    { name: 'homecoming-parade.png', mimeType: 'image/png', buffer: twoTonePng(400, 300) },
+    { name: 'football_kickoff.png', mimeType: 'image/png', buffer: twoTonePng(300, 400) },
+  ]);
+  await expect(upload.getByLabel('Title').first()).toHaveValue('homecoming parade'); // from the file name
+  await expect(upload.getByLabel('Title').nth(1)).toHaveValue('football kickoff');
+  await expect(upload.getByLabel('Photo credit (all photos)')).toHaveValue('Pat Photog');
+  await upload.getByLabel('Tags (all photos)').fill('homecoming, fall');
+  await upload.getByLabel('Description (alt text)').first().fill('Floats rolling down the main road');
+  await upload.getByRole('button', { name: 'Upload 2 photos' }).click();
+  await expect(photog.getByText('2 photos added')).toBeVisible();
+  await expect(photog.getByRole('list', { name: 'Photos' }).getByRole('button')).toHaveCount(2);
+
+  // They can edit their photo's details.
+  await photog.getByRole('button', { name: /homecoming parade/ }).click();
+  await photog.getByLabel('Caption').fill('The parade passes the school.');
+  await photog.getByRole('button', { name: 'Save details' }).click();
+  await expect(photog.getByText('Photo saved')).toBeVisible();
+  await photog.context().close();
+
+  // A writer can browse (read-only), but not add.
+  const writer = await newPage(browser);
+  await signIn(writer, '/newsroom/#/gallery', WRITER.email, WRITER.password);
+  await expect(writer.getByRole('heading', { name: 'Photo gallery' })).toBeVisible();
+  await expect(writer.getByRole('button', { name: 'Upload photos' })).toHaveCount(0);
+  await expect(writer.getByRole('list', { name: 'Photos' }).getByRole('button')).toHaveCount(2);
+  await writer.getByRole('button', { name: /football kickoff/ }).click();
+  await expect(writer.getByRole('dialog').getByRole('button', { name: 'Save details' })).toHaveCount(0);
+  await writer.locator('.modal-foot').getByRole('button', { name: 'Close' }).click();
+
+  // …and picks one for a new story's cover, and another for the body.
+  await writer.goto('/newsroom/#/articles/new');
+  await writer.getByRole('textbox', { name: 'Headline', exact: true }).fill(`Gallery story ${stamp}`);
+  await writer.getByRole('button', { name: 'Choose from gallery' }).click();
+  const picker = writer.getByRole('dialog', { name: 'Choose a photo from the gallery' });
+  await picker.getByLabel('Search the gallery').fill('parade');
+  await expect(picker.getByRole('list', { name: 'Gallery photos' }).getByRole('button')).toHaveCount(1);
+  await picker.getByRole('button', { name: /homecoming parade/ }).click();
+  await expect(picker).toHaveCount(0);
+  await expect(writer.locator('.cover-previews')).toBeVisible();
+  await expect(writer.getByLabel('Description (alt text)')).toHaveValue('Floats rolling down the main road');
+  await expect(writer.getByLabel('Caption')).toHaveValue('The parade passes the school.');
+  await expect(writer.getByLabel('Photo credit')).toHaveValue('Pat Photog');
+  await writer.getByRole('button', { name: 'Insert photo from the gallery' }).click();
+  await writer.getByRole('dialog', { name: 'Choose a photo from the gallery' }).getByRole('button', { name: /football kickoff/ }).click();
+  await expect(writer.getByLabel('Story text')).toHaveValue(/!\[football kickoff\]\(http/);
+  await writer.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(writer.locator('.editor-top .badge', { hasText: 'Draft' })).toBeVisible();
+
+  // The story keeps its own copy of the photo link and text.
+  const c = db(); await c.connect();
+  const { rows: [story] } = await c.query('select cover_image_url, image_alt, body_md from public.articles where title = $1', [`Gallery story ${stamp}`]);
+  const { rows: [g1] } = await c.query(`select url from public.gallery_images where title = 'homecoming parade'`);
+  await c.end();
+  expect(story.cover_image_url).toBe(g1.url);
+  expect(story.image_alt).toBe('Floats rolling down the main road');
+  expect(story.body_md).toContain('![football kickoff](');
+  await writer.context().close();
+});
+
 test('admin sees the audit trail and can change a site setting', async () => {
   await admin.goto('/admin/#/activity');
   const row = admin.getByRole('row', { name: new RegExp(`created writer account ${WRITER.email}`) });

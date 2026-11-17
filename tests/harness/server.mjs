@@ -220,6 +220,9 @@ const server = http.createServer(async (req, res) => {
       const u = users.get(c.sub);
       if (req.method === 'PUT') {
         const b = JSON.parse((await readBody(req)).toString() || '{}');
+        // Like the project setting "Require current password when updating" (which is on in production).
+        if (b.password && !b.current_password) return err(res, 422, 'You need your current password when resetting your password', 'current_password_required');
+        if (b.password && b.current_password !== u.password) return err(res, 422, 'Incorrect current password', 'current_password_mismatch');
         if (b.password && weak(res, b.password)) return;
         if (b.password) u.password = b.password;
         if (b.data) u.meta = { ...u.meta, ...b.data };

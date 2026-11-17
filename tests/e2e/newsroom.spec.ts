@@ -699,6 +699,55 @@ test('Esc closes only the photo cropper when it is open inside another dialog', 
   await expect(admin.getByRole('dialog')).toHaveCount(0);
 });
 
+test('changing a password asks for the current one (Supabase requires it)', async ({ browser }) => {
+  // An account with a temporary password, as an admin would hand over.
+  const email = `temp-${stamp}@example.test`;
+  const TEMP = 'TempPassw0rd!!', FIRST = 'FirstChoice1Passw0rd', SECOND = 'SecondChoice2Passw0rd';
+  const made = await (await fetch('http://127.0.0.1:54330/__test/users', { method: 'POST', body: JSON.stringify({ email, password: TEMP, meta: { must_change_password: true } }) })).json();
+  const c = db(); await c.connect();
+  await c.query(`insert into public.profiles (id, email, display_name, role, sections, active) values ($1, $2, 'Terry Temp', 'writer', '{school-news}', true)`, [made.id, email]);
+  await c.end();
+
+  // First sign-in: they just typed the temporary password, so it isn't asked for again.
+  const page = await newPage(browser);
+  await signIn(page, '/newsroom/', email, TEMP);
+  await expect(page.getByRole('heading', { name: 'Choose your own password' })).toBeVisible();
+  await expect(page.getByLabel('Temporary password')).toHaveCount(0);
+
+  // After a reload the app no longer remembers it, so it asks (and checks it).
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Choose your own password' })).toBeVisible();
+  await expect(page.getByLabel('Temporary password')).toBeVisible();
+  await page.getByLabel('Temporary password').fill('NotTheRightOne1');
+  await page.getByLabel(/^New password/).fill(FIRST);
+  await page.getByLabel('Confirm new password').fill(FIRST);
+  await page.getByRole('button', { name: 'Save new password' }).click();
+  await expect(page.getByText('That isn’t your current password')).toBeVisible();
+  await page.getByLabel('Temporary password').fill(TEMP);
+  await page.getByRole('button', { name: 'Save new password' }).click();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Terry/ })).toBeVisible();
+
+  // Later, "Account security" → Change password needs the current password too.
+  await page.goto('/newsroom/#/security');
+  const form = page.locator('form', { has: page.getByRole('heading', { name: 'Change password' }) });
+  await expect(form.getByLabel('Current password')).toBeVisible();
+  await form.getByLabel('Current password').fill('wrong-current-password');
+  await form.getByLabel(/^New password/).fill(SECOND);
+  await form.getByLabel('Confirm new password').fill(SECOND);
+  await form.getByRole('button', { name: 'Save new password' }).click();
+  await expect(form.getByText('That isn’t your current password')).toBeVisible();
+  await form.getByLabel('Current password').fill(FIRST);
+  await form.getByRole('button', { name: 'Save new password' }).click();
+  await expect(form.getByText('Password updated.')).toBeVisible();
+  await page.context().close();
+
+  // The new password is the one that works now.
+  const again = await newPage(browser);
+  await signIn(again, '/newsroom/', email, SECOND);
+  await expect(again.getByRole('heading', { name: /Good (morning|afternoon|evening), Terry/ })).toBeVisible();
+  await again.context().close();
+});
+
 test('admin can disable an account, which blocks sign-in', async ({ browser }) => {
   await admin.goto('/admin/#/people');
   await admin.getByRole('row', { name: new RegExp(WRITER.email) }).getByRole('button', { name: /Manage/ }).click();

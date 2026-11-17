@@ -94,7 +94,7 @@ export function AuthGate({ require: needs, title, children }: {
     );
   }
 
-  const signOut = async () => { await sessionClient().auth.signOut(); setPhase({ name: 'signed-out' }); };
+  const signOut = async () => { justSignedInWith = null; await sessionClient().auth.signOut(); setPhase({ name: 'signed-out' }); };
 
   switch (phase.name) {
     case 'loading': return <Shell title={title}><Loading /></Shell>;
@@ -132,6 +132,13 @@ export function Shell({ title, children }: { title: string; children: ComponentC
   );
 }
 
+/**
+ * The password just used to sign in, kept only in memory (never stored) so that choosing a new
+ * password right after signing in with a temporary one doesn't ask for it a second time.
+ * Supabase requires the current password to change a password.
+ */
+let justSignedInWith: string | null = null;
+
 function LoginForm({ onDone }: { onDone: () => Promise<void> }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -142,6 +149,7 @@ function LoginForm({ onDone }: { onDone: () => Promise<void> }) {
     setBusy(true); setError('');
     const { error: err } = await sessionClient().auth.signInWithPassword({ email: email.trim(), password });
     if (err) { setBusy(false); setError('That email and password didn’t match. Check them and try again.'); return; }
+    justSignedInWith = password;
     await onDone();
     setBusy(false);
   }
@@ -277,6 +285,13 @@ export function MfaEnroll({ forced = false, onDone, onCancel }: { forced?: boole
   );
 }
 
+/** Friendlier wording for Supabase's own password rejections (weak or breached passwords, wrong current password). */
+function passwordErrorMessage(err: { code?: string; message: string; reasons?: string[] }): string {
+  if (err.code === 'current_password_mismatch') return 'That isn’t your current password. Check it and try again.';
+  if (err.code === 'current_password_required') return 'Enter your current password to choose a new one.';
+  return weakPasswordMessage(err);
+}
+
 /** Friendlier wording for Supabase's own weak-password rejection (it knows about breached passwords too). */
 function weakPasswordMessage(err: { code?: string; message: string; reasons?: string[] }): string {
   if (err.code !== 'weak_password' && !err.reasons) return err.message;
@@ -286,6 +301,9 @@ function weakPasswordMessage(err: { code?: string; message: string; reasons?: st
 }
 
 export function ChangePassword({ forced = false, onDone }: { forced?: boolean; onDone?: () => void | Promise<void> }) {
+  const [current, setCurrent] = useState('');
+  // Straight after signing in with a temporary password we already know it; otherwise ask.
+  const [askCurrent, setAskCurrent] = useState(!forced || justSignedInWith === null);
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [busy, setBusy] = useState(false);
@@ -298,17 +316,28 @@ export function ChangePassword({ forced = false, onDone }: { forced?: boolean; o
     setError(''); setOk(false);
     if (!strong) return setError(`That password doesn’t meet the rules. ${PASSWORD_RULES_SUMMARY}`);
     if (pw !== pw2) return setError('The two passwords don’t match.');
+    const currentPassword = askCurrent ? current : justSignedInWith ?? '';
+    if (!currentPassword) return setError(forced ? 'Enter the temporary password you were given.' : 'Enter your current password.');
     setBusy(true);
-    const { error: err } = await sessionClient().auth.updateUser({ password: pw, data: { must_change_password: false } });
+    const { error: err } = await sessionClient().auth.updateUser({ password: pw, current_password: currentPassword, data: { must_change_password: false } });
     setBusy(false);
-    if (err) return setError(weakPasswordMessage(err as never));
-    setPw(''); setPw2(''); setOk(true);
+    if (err) {
+      if ((err as { code?: string }).code?.startsWith('current_password')) setAskCurrent(true); // ours was wrong or missing: let them type it
+      return setError(passwordErrorMessage(err as never));
+    }
+    justSignedInWith = null;
+    setCurrent(''); setPw(''); setPw2(''); setOk(true);
     await onDone?.();
   }
   return (
     <form class="stack" style={{ '--stack': '14px' }} onSubmit={submit}>
       <h1 class={forced ? 'auth-h' : 'h3'}>{forced ? 'Choose your own password' : 'Change password'}</h1>
       {forced && <p class="muted">You signed in with a temporary password. Pick a new one that only you know.</p>}
+      {askCurrent && (
+        <label class="field"><span class="label">{forced ? 'Temporary password' : 'Current password'}</span>
+          <input class="input" type="password" autocomplete="current-password" required value={current} onInput={(e) => setCurrent((e.target as HTMLInputElement).value)} />
+          {forced && <span class="hint">The one an admin gave you to sign in.</span>}</label>
+      )}
       <label class="field"><span class="label">New password</span>
         <input class="input" type="password" autocomplete="new-password" required value={pw} aria-describedby="pw-rules" onInput={(e) => setPw((e.target as HTMLInputElement).value)} />
         <span class="hint">A few random words with a capital and a number make a great passphrase.</span></label>
@@ -325,7 +354,7 @@ export function ChangePassword({ forced = false, onDone }: { forced?: boolean; o
         {pw2 && pw !== pw2 && <span class="hint">The two passwords don’t match yet.</span>}</label>
       {error && <div class="notice notice-bad" role="alert"><Icon name="warning" />{error}</div>}
       {ok && !forced && <div class="notice notice-ok" role="status"><Icon name="circle-check" />Password updated.</div>}
-      <button class="btn btn-primary" disabled={busy || !strong || pw !== pw2}>{busy ? 'Saving…' : 'Save new password'}</button>
+      <button class="btn btn-primary" disabled={busy || !strong || pw !== pw2 || (askCurrent && !current)}>{busy ? 'Saving…' : 'Save new password'}</button>
     </form>
   );
 }

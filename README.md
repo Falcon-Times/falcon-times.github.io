@@ -1,6 +1,6 @@
 # The Falcon Times
 
-The student newspaper of Avon High School — <https://falcon-times.github.io>
+The student newspaper of Avon High School — <https://thefalcontimes.org>
 
 A fast, mobile-friendly news site with a built-in newsroom: reporters write and submit
 stories, section leaders review and publish them, readers can vote in polls and send

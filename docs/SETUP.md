@@ -79,7 +79,22 @@ instead of `--remote=<ref>`).
 
 **Settings → Pages → Build and deployment → Source: GitHub Actions.**
 Then merge to `main` (or run **Actions → "Deploy site" → Run workflow**). The site appears at
-<https://falcon-times.github.io> within a couple of minutes.
+<https://thefalcontimes.org> within a couple of minutes (or `https://falcon-times.github.io` until a custom
+domain is set up; GitHub redirects that address to the custom domain once there is one).
+
+### Custom domain
+
+The site's own address isn't written into the code: pages, assets and links are all relative to wherever it is
+served, so it works the same on `thefalcontimes.org`, on the `github.io` address or on a test server. To use a
+custom domain: set it under **Settings → Pages → Custom domain** (tick **Enforce HTTPS** once it's available) and
+add the DNS records GitHub lists at your registrar. A `CNAME` file isn't needed because the site is deployed by
+GitHub Actions. Things that are tied to the *address* rather than the code:
+
+* People sign in again on the new address (browser sign-ins, the "already voted" memory and the saved light/dark
+  choice are stored per address), and an unsaved story draft kept in a browser on the old address doesn't follow.
+  Ask writers to save or submit drafts before the switch.
+* Optional: in Supabase → **Authentication → URL Configuration**, set **Site URL** to the new address. This site doesn't send
+  Supabase emails, so nothing breaks if you don't.
 
 ## 6. Create the first super admin (you)
 
@@ -90,7 +105,7 @@ Then merge to `main` (or run **Actions → "Deploy site" → Run workflow**). Th
    ```sql
    select public.bootstrap_super_admin('you@example.com', 'Your Name');
    ```
-3. Open `https://falcon-times.github.io/admin/`, sign in, and follow the prompt to scan a QR code
+3. Open `https://thefalcontimes.org/admin/`, sign in, and follow the prompt to scan a QR code
    with an authenticator app (Google Authenticator, Authy, 1Password…). Admin access only works
    after this second step.
 
@@ -120,7 +135,7 @@ In the admin panel → **People & access → Add account**.
 * Each person gets **their own login**. The system generates a one-time temporary password that you
   hand over in person; they must choose their own at first sign-in.
 * *Link a staff profile* so they can edit their own bio and photo from **My profile**.
-* Share [docs/CONTENT-GUIDE.md](CONTENT-GUIDE.md) and the address `https://falcon-times.github.io/newsroom/` with them.
+* Share [docs/CONTENT-GUIDE.md](CONTENT-GUIDE.md) and the address `https://thefalcontimes.org/newsroom/` with them.
 * To disable someone (graduated, left the club) use **Manage → Account enabled**. Their stories stay.
 * **Which button?** In **Manage** each account action says what it does; in short:
 

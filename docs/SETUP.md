@@ -42,7 +42,9 @@ Under **Authentication** in the Supabase dashboard:
   to **Lowercase, uppercase letters and digits**. The sign-in screens already explain and check exactly
   these rules; if you ever change them in the dashboard, update
   `supabase/functions/_shared/passwordPolicy.ts` to match (Supabase is the authority, that file just
-  produces the friendly messages).
+  produces the friendly messages). If you also turn on **Require current password when updating**, that works:
+  the password screens ask for the current one (after signing in with a temporary password the app already
+  knows it, so first-time setup doesn't ask twice; "Account security" always does).
 * **Multi-Factor →** make sure **TOTP** is enabled (it is by default).
   Admins are required to use it; other members may opt in.
 * Optional: **Attack Protection →** enable CAPTCHA or leaked-password protection if your plan offers it.

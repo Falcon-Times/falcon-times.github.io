@@ -80,7 +80,8 @@ insert into public.articles (id, slug, title, section_id, status, published_at, 
 insert into public.tips (id, category, section_id, message) values
   ('b0000000-0000-0000-0000-000000000001', 'story', 'sports', 'A sports tip about the team'),
   ('b0000000-0000-0000-0000-000000000002', 'story', 'school-news', 'A school news tip for editors'),
-  ('b0000000-0000-0000-0000-000000000003', 'feedback', null, 'A general website feedback tip');
+  ('b0000000-0000-0000-0000-000000000003', 'feedback', null, 'A general website feedback tip'),
+  ('b0000000-0000-0000-0000-000000000004', 'story', null, 'This is an anonymous tip');   -- received before the public tip line was closed
 
 -- ------------------------------------------------------------ anonymous
 select tests.anon();
@@ -95,11 +96,9 @@ select tests.fails('select * from public.article_comments', 'anon cannot read co
 select tests.fails($$update public.articles set title = 'x'$$, 'anon cannot update articles', 'permission denied');
 select tests.fails($$insert into public.articles (slug, title, section_id) values ('x','x','sports')$$, 'anon cannot insert articles', 'permission denied');
 
-insert into public.tips (category, message, contact) values ('story', 'This is an anonymous tip', null);
-select tests.fails($$insert into public.tips (category, message, status) values ('story', 'This tip tries to pre-resolve itself', 'resolved')$$, 'anon cannot set tip status', 'row-level security');
-select tests.fails($$insert into public.tips (category, message, internal_notes) values ('story', 'This tip tries to write notes', 'x')$$, 'anon cannot write internal notes', 'row-level security');
-select tests.fails($$insert into public.tips (category, message) values ('story', 'short')$$, 'too-short tip rejected', 'check constraint');
-select tests.fails($$insert into public.tips (category, message) values ('bogus', 'This category does not exist')$$, 'bad category rejected', 'check constraint');
+select tests.eq(tests.count($$select 1 from public.site_settings where key = 'hotline'$$), 0::bigint, 'the old tip line setting is gone');
+-- The public tip line is closed: the website has no tip form and the API takes no new tips.
+select tests.fails($$insert into public.tips (category, message, contact) values ('story', 'A tip from the public', null)$$, 'anon cannot submit tips any more', 'permission denied');
 
 -- anon RPCs
 select tests.anon();
@@ -153,6 +152,7 @@ select tests.affects($$update public.articles set title = 'hax' where slug = 'dr
 select tests.affects($$delete from public.articles where slug = 'draft-sports'$$, 0, 'writer cannot delete others'' drafts');
 select tests.affects($$delete from public.articles where slug = 'pub-news'$$, 0, 'writer cannot delete published article');
 select tests.eq(tests.count('select 1 from public.tips'), 0::bigint, 'writer reads no tips');
+select tests.fails($$insert into public.tips (category, message) values ('story', 'A tip from a signed-in user')$$, 'signed-in users cannot submit tips either', 'permission denied');
 select tests.eq(tests.count('select 1 from public.profiles'), 1::bigint, 'writer sees only own profile');
 update public.profiles set role = 'admin', sections = '{sports,school-news}', active = true where id = auth.uid();
 select tests.eq((select role from public.profiles where id = auth.uid()), 'writer', 'writer cannot escalate own role');

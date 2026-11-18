@@ -70,7 +70,7 @@ for every photo, and credit yourself.
 
 | Tool | Use it for |
 | --- | --- |
-| **Tip line** | Review anonymous tips. Set a status, assign it, add private notes. Only leaders and admins see these — keep them confidential. If the sender left contact details, only use them to follow up on the tip. |
+| **Tip line** | Tips received before the public tip line was closed (no new ones arrive). Review them. Set a status, assign it, add private notes. Only leaders and admins see these — keep them confidential. If the sender left contact details, only use them to follow up on the tip. |
 | **Scoreboard** | (Sports) add games, then enter final scores. Feeds the front page. |
 | **Polls** | Create a poll (2–8 answers). Active polls appear on the front page; you can reset votes. |
 | **Announcement bar** | A gold banner above the masthead — meetings, deadlines, breaking news. |
@@ -79,7 +79,7 @@ for every photo, and credit yourself.
 ## Editorial standards
 
 * Every story carries its publication time; updates and corrections are announced, never silent.
-* No open comment sections. Reader responses come through **Letters to the Editor** (via the tip line) and are signed.
+* No open comment sections. Reader responses come through **Letters to the Editor** (sent by email to the club address) and are signed.
 * Credit photographers. Describe images (alt text). Get permission before publishing something someone told you in confidence.
 * Opinion pieces go in **Opinion + Advice** and are labelled as opinion.
 * If you're unsure about a name, a fact, or a photo of a minor, ask your section leader before submitting.

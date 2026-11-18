@@ -18,17 +18,12 @@
       "youtube": "",
       "x": ""
     },
-    "hotline": {
-      "enabled": true,
-      "intro": "Send us a story idea, a correction, a letter to the editor or a shout-out. You can stay completely anonymous. Only our editors can read what you send."
-    },
     "standards": {
       "points": [
         "Every article is stamped with the date and time it was published.",
         "Updates and corrections are announced at the top of the article.",
         "Original photography, credited to the photographer.",
-        "No open comment sections. Respond with a Letter to the Editor or send us a tip.",
-        "Tips can be anonymous. We never publish what you send without your permission."
+        "No open comment sections. Respond with a Letter to the Editor."
       ]
     }
   },
@@ -596,7 +591,7 @@
       "status": "published",
       "is_lead": true,
       "published_at": "2026-10-18T12:00:00-04:00",
-      "body_md": "The Falcon Times is the student newspaper of Avon High School, written, photographed, designed and published by the Avon High School Newspaper Club. This is the first issue of our new home on the web, and we're glad you're here.\n\n## What you'll find here\n\nOur reporters and editors are organized into teams, each with a section leader:\n\n- **School News** — policies, programs, clubs and life across Avon.\n- **Sports** — scores, recaps and athlete spotlights for every Falcon team.\n- **Opinion + Advice** — editorials, student voices, letters to the editor and advice.\n- **Culture + Entertainment** — music, film, books, games and the arts.\n- **Social Media** — highlights from our channels and what's trending in the halls.\n- **Photography + Video** — photo essays, galleries and video.\n\nBehind the scenes, our **Layout + Design** team builds and maintains the site you're reading right now.\n\n## How we work\n\nEvery story we publish is stamped with the date and time it went live. If we update a story after publication, we say so right at the top, along with what changed. If we get something wrong, we'll fix it and tell you.\n\nWe don't run open comment sections. Instead, you can send a **Letter to the Editor**, vote in our **polls**, or use our **tip line**.\n\n## Tell us something\n\nKnow about a story we should cover? Spotted a mistake? Want to shout out a teammate? Use the **Tip Line** at the top of any page. You can stay completely anonymous — leave contact details only if you'd like us to follow up.\n\nInterested in writing, shooting photos or video, designing, or running social media? Talk to any section leader or come find us at a club meeting.",
+      "body_md": "The Falcon Times is the student newspaper of Avon High School, written, photographed, designed and published by the Avon High School Newspaper Club. This is the first issue of our new home on the web, and we're glad you're here.\n\n## What you'll find here\n\nOur reporters and editors are organized into teams, each with a section leader:\n\n- **School News** — policies, programs, clubs and life across Avon.\n- **Sports** — scores, recaps and athlete spotlights for every Falcon team.\n- **Opinion + Advice** — editorials, student voices, letters to the editor and advice.\n- **Culture + Entertainment** — music, film, books, games and the arts.\n- **Social Media** — highlights from our channels and what's trending in the halls.\n- **Photography + Video** — photo essays, galleries and video.\n\nBehind the scenes, our **Layout + Design** team builds and maintains the site you're reading right now.\n\n## How we work\n\nEvery story we publish is stamped with the date and time it went live. If we update a story after publication, we say so right at the top, along with what changed. If we get something wrong, we'll fix it and tell you.\n\nWe don't run open comment sections. Instead, you can send a **Letter to the Editor** or vote in our **polls**.\n\n## Get involved\n\nInterested in writing, shooting photos or video, designing, or running social media? Talk to any section leader or come find us at a club meeting.",
       "tags": [
         "welcome",
         "newspaper club"

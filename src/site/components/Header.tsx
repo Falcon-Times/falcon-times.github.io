@@ -5,7 +5,6 @@ import { safeStorage } from '@/lib/store';
 import { Icon } from '@/ui/Icon';
 import { Logo } from '@/ui/Logo';
 import { useNews } from '../data';
-import { openTipLine } from './Tip';
 import { Weather } from './Weather';
 
 const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -88,7 +87,6 @@ function ThemeToggle() {
 }
 
 export function TopBar() {
-  const { site } = useNews();
   return (
     <div class="topbar">
       <div class="wrap topbar-in">
@@ -96,9 +94,6 @@ export function TopBar() {
         <div class="topbar-right">
           <span class="hide-md"><Weather /></span>
           <ThemeToggle />
-          {site.settings.hotline.enabled && (
-            <button class="topbar-btn topbar-tip" onClick={openTipLine}><Icon name="megaphone" size={14} /> Submit a tip</button>
-          )}
         </div>
       </div>
     </div>

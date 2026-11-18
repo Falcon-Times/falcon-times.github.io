@@ -7,7 +7,6 @@ import { ArticleCard, Byline, Cover, SectionTag, Stamp } from '../components/Art
 import { TrendingCarousel } from '../components/Carousel';
 import { PollCard } from '../components/PollCard';
 import { Scoreboard } from '../components/Scoreboard';
-import { TipCard } from '../components/Tip';
 
 export function Home() {
   const { lead, trending, articles, sections, sectionById, staff, site, loading } = useNews();
@@ -48,7 +47,7 @@ export function Home() {
           {latest.length ? (
             <div class="card-grid">{latest.map((a) => <ArticleCard key={a.id} article={a} />)}</div>
           ) : (
-            <Empty title="Fresh stories coming soon">Our first reporters are hard at work. In the meantime, say hi through the tip line!</Empty>
+            <Empty title="Fresh stories coming soon">Our first reporters are hard at work. Check back soon!</Empty>
           )}
           {rest.length > 6 && <a class="btn" href={href('/search?q=')}>Browse all stories <Icon name="arrow-right" size={16} /></a>}
         </section>
@@ -71,15 +70,12 @@ export function Home() {
         );
       })}
 
-      {/* After all the news: the tip line, our standards and who we are. */}
+      {/* After all the news: our standards and who we are. */}
       <div class="closing">
-        <div class="closing-grid">
-          {site.settings.hotline.enabled && <TipCard />}
-          <section class="panel standards">
-            <h2><Icon name="shield-check" size={18} /> Our standards</h2>
-            <ul class="ticks">{site.settings.standards.points.map((p) => <li key={p}><Icon name="check" size={15} />{p}</li>)}</ul>
-          </section>
-        </div>
+        <section class="panel standards">
+          <h2><Icon name="shield-check" size={18} /> Our standards</h2>
+          <ul class="ticks">{site.settings.standards.points.map((p) => <li key={p}><Icon name="check" size={15} />{p}</li>)}</ul>
+        </section>
         <section class="panel meet" aria-labelledby="meet-h">
           <div class="panel-head">
             <div><span class="eyebrow">Masthead</span><h2 id="meet-h">Meet our section leaders</h2></div>

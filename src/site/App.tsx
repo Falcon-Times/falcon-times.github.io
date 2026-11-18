@@ -6,7 +6,6 @@ import { Icon } from '@/ui/Icon';
 import { NewsProvider, useNews } from './data';
 import { AnnouncementBar, Masthead, Nav, TopBar } from './components/Header';
 import { Footer } from './components/Footer';
-import { TipModal } from './components/Tip';
 import { Home } from './pages/Home';
 import { SectionPage } from './pages/Section';
 import { ArticlePage } from './pages/Article';
@@ -47,7 +46,6 @@ function Routes() {
       )}
       <main id="main" tabIndex={-1} class="wrap main">{page}</main>
       <Footer />
-      <TipModal />
       <Toasts />
     </>
   );

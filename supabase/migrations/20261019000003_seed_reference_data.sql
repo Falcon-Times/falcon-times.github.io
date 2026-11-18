@@ -13,8 +13,7 @@ insert into public.sections (id, name, description, icon, subsections, sort_orde
 insert into public.site_settings (key, value) values ('site', '{"name":"The Falcon Times","tagline":"The student voice of Avon High School","school":"Avon High School","address":"510 West Avon Road, Avon, CT 06001","latitude":41.8087,"longitude":-72.8307,"place":"Avon, CT"}'::jsonb) on conflict (key) do nothing;
 insert into public.site_settings (key, value) values ('contact', '{"email":""}'::jsonb) on conflict (key) do nothing;
 insert into public.site_settings (key, value) values ('social', '{"instagram":"","tiktok":"","youtube":"","x":""}'::jsonb) on conflict (key) do nothing;
-insert into public.site_settings (key, value) values ('hotline', '{"enabled":true,"intro":"Send us a story idea, a correction, a letter to the editor or a shout-out. You can stay completely anonymous. Only our editors can read what you send."}'::jsonb) on conflict (key) do nothing;
-insert into public.site_settings (key, value) values ('standards', '{"points":["Every article is stamped with the date and time it was published.","Updates and corrections are announced at the top of the article.","Original photography, credited to the photographer.","No open comment sections. Respond with a Letter to the Editor or send us a tip.","Tips can be anonymous. We never publish what you send without your permission."]}'::jsonb) on conflict (key) do nothing;
+insert into public.site_settings (key, value) values ('standards', '{"points":["Every article is stamped with the date and time it was published.","Updates and corrections are announced at the top of the article.","Original photography, credited to the photographer.","No open comment sections. Respond with a Letter to the Editor."]}'::jsonb) on conflict (key) do nothing;
 
 insert into public.quotes (text, attribution, sort_order) select 'Journalism can never be silent: that is its greatest virtue and its greatest fault.', 'Henry Anatole Grunwald', 10 where not exists (select 1 from public.quotes where text = 'Journalism can never be silent: that is its greatest virtue and its greatest fault.');
 insert into public.quotes (text, attribution, sort_order) select 'The way to right wrongs is to turn the light of truth upon them.', 'Ida B. Wells', 20 where not exists (select 1 from public.quotes where text = 'The way to right wrongs is to turn the light of truth upon them.');
@@ -80,10 +79,8 @@ Behind the scenes, our **Layout + Design** team builds and maintains the site yo
 
 Every story we publish is stamped with the date and time it went live. If we update a story after publication, we say so right at the top, along with what changed. If we get something wrong, we''ll fix it and tell you.
 
-We don''t run open comment sections. Instead, you can send a **Letter to the Editor**, vote in our **polls**, or use our **tip line**.
+We don''t run open comment sections. Instead, you can send a **Letter to the Editor** or vote in our **polls**.
 
-## Tell us something
-
-Know about a story we should cover? Spotted a mistake? Want to shout out a teammate? Use the **Tip Line** at the top of any page. You can stay completely anonymous — leave contact details only if you''d like us to follow up.
+## Get involved
 
 Interested in writing, shooting photos or video, designing, or running social media? Talk to any section leader or come find us at a club meeting.', 'school-news', 'Clubs + Activities', 'published', true, '2026-10-18T12:00:00-04:00', array['welcome', 'newspaper club']::text[]) on conflict (slug) do nothing;

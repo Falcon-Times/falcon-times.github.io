@@ -3,28 +3,27 @@
 The student newspaper of Avon High School — <https://thefalcontimes.org>
 
 A fast, mobile-friendly news site with a built-in newsroom: reporters write and submit
-stories, section leaders review and publish them, readers can vote in polls and send
-anonymous tips, and an admin panel runs the whole thing — all protected by per-person
+stories, section leaders review and publish them, readers can vote in polls, and an admin panel runs the whole thing — all protected by per-person
 accounts (and two-factor sign-in for admins).
 
 | Area | Address | Who |
 | --- | --- | --- |
 | The newspaper | `/` | everyone |
-| Newsroom (write, review, tip line, polls, scoreboard) | `/newsroom/` | writers & section leaders |
+| Newsroom (write, review, polls, scoreboard) | `/newsroom/` | writers & section leaders |
 | Admin (accounts, staff roster, sections, settings, activity log) | `/admin/` | admins and super admins |
 
 ## How it works
 
 ```
  GitHub Pages  ──►  static site (Preact + Vite)  ──►  Supabase
- (built by GitHub Actions)                              ├─ Postgres + row-level security   (articles, tips, polls, …)
+ (built by GitHub Actions)                              ├─ Postgres + row-level security   (articles, polls, …)
                                                         ├─ Auth (passwords + TOTP 2FA)    (one account per person)
                                                         ├─ Storage                         (article photos)
                                                         └─ Edge Function "admin-users"     (create/disable accounts)
 ```
 
-GitHub Pages can only serve static files, so everything dynamic — logins, articles, the tip
-line — lives in a small managed backend (Supabase's free tier is plenty). The browser only ever
+GitHub Pages can only serve static files, so everything dynamic — logins, articles,
+polls — lives in a small managed backend (Supabase's free tier is plenty). The browser only ever
 holds Supabase's *public* key; **what each person may do is enforced inside the database**, not
 in the page. Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the security model.
 

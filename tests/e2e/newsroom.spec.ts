@@ -32,12 +32,13 @@ test('public front page renders content from the database', async ({ page }) => 
   await expect(page.getByRole('link', { name: 'Athlete Spotlights' })).toBeVisible();
 });
 
-test('a reader can send an anonymous tip', async ({ page }) => {
+test('the public site has no tip line, but tips received earlier stay in the newsroom', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /Submit a tip/i }).click();
-  await page.getByLabel('Your message').fill(TIP);
-  await page.getByRole('button', { name: 'Send to the editors' }).click();
-  await expect(page.getByRole('heading', { name: 'Thank you!' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Latest stories' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /tip/i })).toHaveCount(0);
+  // A tip that arrived before the tip line was closed (the API no longer accepts new ones).
+  const r = await fetch('http://127.0.0.1:54330/__test/tips', { method: 'POST', body: JSON.stringify({ message: TIP }) });
+  expect(r.ok).toBe(true);
 });
 
 test('a reader can vote in the poll, once', async ({ page }) => {

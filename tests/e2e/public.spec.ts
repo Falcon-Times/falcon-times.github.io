@@ -108,6 +108,16 @@ test.describe('front page layout and wording', () => {
     expect(await page.locator('body').innerText()).not.toMatch(/\bFalcons\b/);
   });
 
+  test('sub-section names use "+" like the rest of the site', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Latest stories' })).toBeVisible();
+    // The sub-section menus are collapsed, so read the text rather than what is visible.
+    const nav = (await page.locator('nav[aria-label="Sections"]').textContent()) ?? '';
+    expect(nav).toContain('Clubs + Activities');
+    expect(nav).not.toContain('&');
+    expect(await page.locator('main').innerText()).not.toMatch(/ & /);
+  });
+
   test('footer links are capitalised the same way and use one connector', async ({ page }) => {
     await page.goto('/');
     const links = (await page.locator('footer.footer a, footer.footer .btn').allInnerTexts()).map((t) => t.trim()).filter(Boolean);

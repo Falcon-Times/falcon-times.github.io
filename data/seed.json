@@ -40,10 +40,10 @@
       "sort_order": 10,
       "description": "What's happening at Avon High School — policies, programs, clubs and the Avon community.",
       "subsections": [
-        "Administration & Policy",
-        "Clubs & Activities",
+        "Administration + Policy",
+        "Clubs + Activities",
         "Academics",
-        "Avon & Community"
+        "Avon + Community"
       ]
     },
     {
@@ -80,9 +80,9 @@
       "description": "Music, film, books, games, performances and everything students are into right now.",
       "subsections": [
         "Music",
-        "Film & TV",
-        "Books & Games",
-        "Arts & Performances"
+        "Film + TV",
+        "Books + Games",
+        "Arts + Performances"
       ]
     },
     {
@@ -592,7 +592,7 @@
       "title": "Welcome to the new Falcon Times",
       "deck": "Avon High School’s student newspaper has a new home, a new team, and a way for every student to be heard.",
       "section_id": "school-news",
-      "subsection": "Clubs & Activities",
+      "subsection": "Clubs + Activities",
       "status": "published",
       "is_lead": true,
       "published_at": "2026-10-18T12:00:00-04:00",

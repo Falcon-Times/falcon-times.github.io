@@ -128,7 +128,8 @@ notes) · `article_views` (anonymous daily counters for "trending") · `staff_me
   (admins can).
 * The staff roster publishes **names, titles, optional bios and photos of students**. Confirm each student
   (and their family, per school policy) is comfortable with that before listing them or adding a photo, and
-  remove anyone who asks — *Staff roster → Edit → Listed on the site*.
+  remove anyone who asks — *Staff roster → Delete* removes them for good (their portrait file too, unless a story
+  still uses it); *Edit → Listed on the site* just hides them.
 * Photos are public once uploaded. Credit photographers and avoid identifying minors beyond what the school permits.
 
 ## Known limitations

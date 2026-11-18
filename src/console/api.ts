@@ -231,6 +231,41 @@ export async function deleteGalleryImage(id: string): Promise<FileOutcome> {
   return 'removed';
 }
 
+// ---------------------------------------------------------- staff roster
+export interface StaffImpact { stories: number; published: number; accounts: { name: string; email: string }[] }
+
+/** What deleting a roster entry would touch: stories crediting them, and login accounts linked to them. */
+export async function staffRemovalImpact(id: string): Promise<StaffImpact> {
+  const [stories, accounts] = await Promise.all([
+    db().from('articles').select('id,status').contains('byline_ids', [id]).limit(2000),
+    db().from('profiles').select('display_name,email').eq('staff_member_id', id),
+  ]);
+  const s = unwrap(stories) as { id: string; status: string }[];
+  const a = unwrap(accounts) as { display_name: string; email: string }[];
+  return { stories: s.length, published: s.filter((x) => x.status === 'published').length, accounts: a.map((p) => ({ name: p.display_name, email: p.email })) };
+}
+
+/** Hides a roster entry from the public site without deleting it. */
+export async function unlistStaffMember(id: string): Promise<void> {
+  const res = await db().from('staff_members').update({ active: false }).eq('id', id).select('id');
+  if (res.error) throw new Error(res.error.message);
+  if (!res.data?.length) throw new Error('Could not unlist them.');
+}
+
+/**
+ * Deletes a staff roster entry (bylines are cleaned up by the database; any linked login account is
+ * kept, just unlinked), then removes their portrait file when nothing else uses it.
+ */
+export async function deleteStaffMember(id: string): Promise<FileOutcome> {
+  const res = await db().rpc('delete_staff_member', { p_id: id });
+  if (res.error) throw new Error(res.error.message);
+  const path = res.data as string | null;
+  if (!path) return 'kept-in-use';
+  const gone = await db().storage.from('media').remove([path]);
+  if (gone.error || !gone.data?.length) return 'kept-other';
+  return 'removed';
+}
+
 // ------------------------------------------------------- 2FA bypass codes
 export interface BypassInfo { user_id: string; expires_at: string; failed_attempts: number }
 /** Admin: make a one-time code for someone else. The 10 digits are returned once and never stored in clear. */

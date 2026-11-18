@@ -174,7 +174,6 @@ export interface SiteSettings {
   };
   contact: { email: string };
   social: { instagram: string; tiktok: string; youtube: string; x: string };
-  hotline: { enabled: boolean; intro: string };
   standards: { points: string[] };
 }
 

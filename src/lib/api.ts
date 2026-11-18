@@ -6,7 +6,7 @@ import {
 } from './fallback';
 import type {
   Announcement, Article, ArticleSummary, Game, PollWithVotes, Quote, Section, SiteData,
-  SiteSettings, StaffMember, TipCategory,
+  SiteSettings, StaffMember,
 } from './types';
 
 const SUMMARY_COLUMNS =
@@ -108,19 +108,4 @@ export async function castVote(pollId: string, optionId: string): Promise<void> 
   if (!isConfigured) return;
   const res = await anonClient().rpc('cast_vote', { p_poll: pollId, p_option: optionId });
   if (res.error) throw new Error(res.error.message);
-}
-
-export interface TipInput {
-  category: TipCategory;
-  section_id: string | null;
-  message: string;
-  contact: string | null;
-}
-
-export async function submitTip(tip: TipInput): Promise<void> {
-  if (!isConfigured) throw new Error('The tip line is not connected yet.');
-  const res = await anonClient().from('tips').insert(tip);
-  if (res.error) {
-    throw new Error(/busy/i.test(res.error.message) ? res.error.message : 'We could not send that. Please try again in a moment.');
-  }
 }

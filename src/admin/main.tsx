@@ -13,7 +13,6 @@ import { Dashboard } from '@/console/pages/Dashboard';
 import { Gallery } from '@/console/pages/Gallery';
 import { People } from '@/console/pages/People';
 import { Settings } from '@/console/pages/Settings';
-import { Tips } from '@/console/pages/Tips';
 
 const nav: NavItem[] = [
   { path: '/', label: 'Overview', icon: 'home' },
@@ -22,7 +21,6 @@ const nav: NavItem[] = [
   { path: '/activity', label: 'Activity log', icon: 'history', group: 'Administration' },
   { path: '/articles', label: 'All stories', icon: 'file', group: 'Content' },
   { path: '/gallery', label: 'Photo gallery', icon: 'camera', group: 'Content' },
-  { path: '/tips', label: 'Tip line', icon: 'megaphone', group: 'Content' },
   { path: '/sections', label: 'Sections & menu', icon: 'layers', group: 'Content' },
   { path: '/staff', label: 'Staff roster', icon: 'users', group: 'Content' },
   { path: '/scoreboard', label: 'Scoreboard', icon: 'trophy', group: 'Content' },
@@ -41,7 +39,6 @@ const routes: RouteDef[] = [
   { pattern: '/articles/new', render: () => <ArticleEditor id={null} /> },
   { pattern: '/articles/:id', render: (p) => <ArticleEditor key={p.id} id={p.id} /> },
   { pattern: '/gallery', render: () => <Gallery /> },
-  { pattern: '/tips', render: () => <Tips /> },
   { pattern: '/sections', render: () => <Sections /> },
   { pattern: '/staff', render: () => <StaffRoster /> },
   { pattern: '/scoreboard', render: () => <Scoreboard /> },

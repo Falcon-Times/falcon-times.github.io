@@ -3,7 +3,7 @@
 import { sessionClient, unwrap } from '@/lib/supabase';
 import { slugify } from '@/lib/format';
 import type {
-  Article, ArticleComment, ArticleStatus, AuditEntry, Game, GalleryImage, Poll, Profile, Section, StaffMember, Tip,
+  Article, ArticleComment, ArticleStatus, AuditEntry, Game, GalleryImage, Poll, Profile, Section, StaffMember,
 } from '@/lib/types';
 
 const db = () => sessionClient();
@@ -87,22 +87,6 @@ export async function addComment(articleId: string, authorId: string, body: stri
   if (res.error) throw new Error(res.error.message);
 }
 
-// -------------------------------------------------------------------- tips
-export async function listTips(): Promise<Tip[]> {
-  const res = await db().from('tips').select('*').order('created_at', { ascending: false }).limit(500);
-  return unwrap(res) as Tip[];
-}
-export async function updateTip(id: string, patch: Partial<Pick<Tip, 'status' | 'assigned_to' | 'internal_notes'>>) {
-  const res = await db().from('tips').update(patch).eq('id', id).select('id');
-  if (res.error) throw new Error(res.error.message);
-  if (!res.data?.length) throw new Error('You can’t change that tip.');
-}
-export async function deleteTip(id: string) {
-  const res = await db().from('tips').delete().eq('id', id).select('id');
-  if (res.error) throw new Error(res.error.message);
-  if (!res.data?.length) throw new Error('Only admins can delete tips.');
-}
-
 // ------------------------------------------------------------ generic CRUD
 export async function listRows<T>(table: string, orderBy: string, ascending = true, limit = 500): Promise<T[]> {
   const res = await db().from(table).select('*').order(orderBy, { ascending }).limit(limit);
@@ -159,12 +143,6 @@ export async function countTable(table: string): Promise<number> {
   if (res.error) throw new Error(res.error.message);
   return res.count ?? 0;
 }
-export async function countWhere(table: string, column: string, value: string): Promise<number> {
-  const res = await db().from(table).select('id', { count: 'exact', head: true }).eq(column, value);
-  if (res.error) throw new Error(res.error.message);
-  return res.count ?? 0;
-}
-
 // -------------------------------------------------------------------- admin
 export async function listProfiles(): Promise<Profile[]> {
   return listRows<Profile>('profiles', 'display_name');

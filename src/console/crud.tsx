@@ -48,6 +48,8 @@ export interface CrudConfig<T extends { id?: string }> {
   defaults: () => Partial<T>;
   canEdit: boolean;
   canDelete?: boolean;
+  /** Deleting from inside the Edit dialog, with its own confirmation (instead of the row's trash icon). */
+  customDelete?: (props: { row: T; onClose: () => void; onDone: () => void }) => ComponentChildren;
   /** Last-chance transform/validation before saving. Throw to abort. */
   prepare?: (values: Record<string, unknown>, isNew: boolean) => Record<string, unknown>;
   empty?: string;
@@ -122,6 +124,7 @@ function RecordModal<T extends { id?: string }>({ config, state, onClose, onSave
   const { sections } = useRefs();
   const [values, setValues] = useState(state.values);
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const set = (k: string, v: unknown) => setValues((cur) => ({ ...cur, [k]: v }));
   const key = config.key ?? 'id';
 
@@ -147,8 +150,14 @@ function RecordModal<T extends { id?: string }>({ config, state, onClose, onSave
   const pubSections = sections.filter((s) => s.active);
 
   return (
+    <>
     <Modal title={`${state.isNew ? 'New' : 'Edit'} ${config.singular}`} onClose={onClose} width={680}
-      footer={<><button type="button" class="btn" onClick={onClose}>Cancel</button><button form="crud-form" class="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button></>}>
+      footer={<>
+        {!state.isNew && config.customDelete && (
+          <button type="button" class="btn btn-danger" style={{ marginRight: 'auto' }} disabled={busy} onClick={() => setDeleting(true)}><Icon name="trash" size={15} /> Delete</button>
+        )}
+        <button type="button" class="btn" onClick={onClose}>Cancel</button><button form="crud-form" class="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+      </>}>
       <form id="crud-form" class="form-grid" onSubmit={save}>
         {config.fields.filter((f) => !f.showIf || f.showIf(values)).map((f) => {
           const cls = f.full || f.type === 'textarea' || f.type === 'sections' || f.type === 'options' || f.type === 'image' ? 'full' : undefined;
@@ -180,5 +189,7 @@ function RecordModal<T extends { id?: string }>({ config, state, onClose, onSave
         })}
       </form>
     </Modal>
+    {deleting && config.customDelete?.({ row: state.values as unknown as T, onClose: () => setDeleting(false), onDone: onSaved })}
+    </>
   );
 }

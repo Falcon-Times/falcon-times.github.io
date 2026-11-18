@@ -24,7 +24,6 @@ Roles live in `public.profiles`: writer < section leader < admin < **super admin
 | Draft & submit stories in their sections | | ✅ | ✅ | | ✅ (any) | ✅ |
 | Edit a story after it's published | | | ✅ own sections | ✅ photos only | ✅ | ✅ |
 | Publish, schedule, unpublish, feature, set the lead story | | | ✅ own sections | | ✅ | ✅ |
-| Read & triage tips | | | ✅ own sections + general | | ✅ all | ✅ |
 | Scoreboard (sports leader), polls, announcements, quotes | | | ✅ | | ✅ | ✅ |
 | Edit own bio/photo | | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Staff roster, sections, settings, activity log; accounts of writers, section leaders & photographers | | | | | ✅ **(needs 2FA)** | ✅ |
@@ -32,8 +31,8 @@ Roles live in `public.profiles`: writer < section leader < admin < **super admin
 
 *Photographers:* RLS lets them read every article and update it; the `guard_articles` trigger then puts every
 column except `cover_image_url`, `image_alt`, `image_caption` and `photo_credit` back to its old value, so even a
-hand-made request can't touch the writing, status or schedule. They can't insert or delete stories, read notes or
-tips, or hold sections (a table constraint), so they never count as writers.
+hand-made request can't touch the writing, status or schedule. They can't insert or delete stories, read notes
+or hold sections (a table constraint), so they never count as writers.
 
 *Photo gallery:* `public.gallery_images` holds links and text for photos in the public `media` bucket. Every staff role
 can read it; photographers, admins and the `photo-video` section leader can add rows; the uploader (or an admin /
@@ -51,11 +50,8 @@ touch *School News*, even by crafting requests by hand — the database refuses.
 
 1. **Row-level security (RLS)** on every table (`supabase/migrations/…01_schema.sql`). Anonymous visitors
    can only `select` public content and call two tiny RPCs (`cast_vote`, `record_view`).
-   The public tip line is closed: the tip table has no public `insert` or `select` policy, so it takes no
-   new tips and exposes none; tips received earlier are readable only by section leaders and admins.
 2. **Field-level guards** (database triggers). RLS chooses rows; triggers choose fields. A writer can't
-   flip `featured`/`is_lead`/`published_at`, nobody but an admin can change a role, editors can't rewrite
-   what a tipster sent, `created_by` can't be forged, published URLs can't change, and the last active admin
+   flip `featured`/`is_lead`/`published_at`, nobody but an admin can change a role, `created_by` can't be forged, published URLs can't change, and the last active admin
    can't be demoted, disabled or deleted.
 3. **Two-factor for admins.** `effective_role()` only treats someone as an admin if the session's JWT says
    `aal2` (a TOTP code was verified). A stolen admin password is therefore *worthless on its own* — it
@@ -87,7 +83,7 @@ touch *School News*, even by crafting requests by hand — the database refuses.
 7. **Public client is always anonymous.** Even if a section leader is signed in on the same browser, the
    public site uses a separate anonymous client, so it never shows unpublished drafts.
 8. **Audit trail.** Changes to stories, accounts, roster, sections, settings, polls, scores, quotes,
-   announcements and tips are logged with who/when/what-columns (never tip text).
+   and announcements are logged with who/when/what-columns.
 9. **Abuse limits.** Poll votes are one-per-browser (remembered locally) — good for a school poll, not a
    ballot box. Supabase rate-limits sign-in attempts.
 
@@ -115,7 +111,7 @@ and admins also need a second factor. Enable it if you ever upgrade.
 
 `sections` → `articles` (status: draft → submitted → published → archived) · `article_comments` (private editor
 notes) · `article_views` (anonymous daily counters for "trending") · `staff_members` (public roster/bios) ·
-`profiles` (login accounts; separate from the roster) · `tips` · `polls` + `poll_tallies` · `games` · `quotes` ·
+`profiles` (login accounts; separate from the roster) · `polls` + `poll_tallies` · `games` · `quotes` ·
 `announcements` · `site_settings` · `audit_log`. Photos live in the public `media` storage bucket.
 
 "Trending" = stories an editor pinned, then most-read in the last 7 days, then newest.
@@ -124,8 +120,6 @@ notes) · `article_views` (anonymous daily counters for "trending") · `staff_me
 
 * The site stores **no analytics, cookies or trackers.** Fonts are self-hosted. Two optional third-party
   requests exist: Open-Meteo (weather; sends the visitor's IP to them) and YouTube (only when a story embeds a video).
-* Tips received before the tip line closed contain only what the sender typed. Delete ones you no longer need
-  (admins can).
 * The staff roster publishes **names, titles, optional bios and photos of students**. Confirm each student
   (and their family, per school policy) is comfortable with that before listing them or adding a photo, and
   remove anyone who asks — *Staff roster → Delete* removes them for good (their portrait file too, unless a story

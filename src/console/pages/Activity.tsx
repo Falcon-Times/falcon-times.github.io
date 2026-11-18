@@ -8,7 +8,7 @@ import { useRefs } from '../refs';
 const OP: Record<string, string> = { INSERT: 'created', UPDATE: 'changed', DELETE: 'deleted' };
 const TABLE: Record<string, string> = {
   articles: 'story', profiles: 'account', staff_members: 'staff member', sections: 'section', site_settings: 'setting',
-  polls: 'poll', games: 'game', quotes: 'quote', announcements: 'announcement', tips: 'tip',
+  polls: 'poll', games: 'game', quotes: 'quote', announcements: 'announcement', tips: 'tip' /* the tip line is gone; old log entries remain */,
 };
 
 export function Activity() {

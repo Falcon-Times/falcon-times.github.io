@@ -275,3 +275,8 @@ a.announce-in:hover { text-decoration: underline; }
 .cover-lead .cover-ph { flex-direction: row; }
 
 
+
+/* The closing band: tip line + standards side by side, then the section leaders, after all the news. */
+.closing { display: grid; gap: 24px; }
+.closing-grid { display: grid; gap: 24px; grid-template-columns: 1fr; align-items: stretch; }
+@media (min-width: 800px) { .closing-grid { grid-template-columns: 1fr 1fr; } }

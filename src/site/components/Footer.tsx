@@ -24,16 +24,16 @@ export function Footer() {
           <div>
             <h3>The newsroom</h3>
             <ul>
-              <li><a href={href('/staff')}>Meet the staff</a></li>
-              <li><a href={href('/scores')}>Scores &amp; schedule</a></li>
-              <li><a href={href('/about')}>About &amp; standards</a></li>
-              {s.contact.email && <li><a href={`mailto:${s.contact.email}`}>Contact us</a></li>}
+              <li><a href={href('/staff')}>Meet the Staff</a></li>
+              <li><a href={href('/scores')}>Scores + Schedule</a></li>
+              <li><a href={href('/about')}>About + Standards</a></li>
+              {s.contact.email && <li><a href={`mailto:${s.contact.email}`}>Contact Us</a></li>}
             </ul>
           </div>
           <div class="stack" style={{ '--stack': '10px' }}>
             <h3>Get involved</h3>
             <p class="small">Want to write, shoot, design or share a confidential tip?</p>
-            {s.hotline.enabled && <button class="btn btn-gold" onClick={openTipLine}><Icon name="megaphone" size={15} /> Open the tip line</button>}
+            {s.hotline.enabled && <button class="btn btn-gold" onClick={openTipLine}><Icon name="megaphone" size={15} /> Open the Tip Line</button>}
             {social.length > 0 && (
               <ul class="row socials">
                 {social.map(([name, url]) => <li key={name}><a href={url} rel="noopener noreferrer" target="_blank">{name === 'x' ? 'X' : name[0].toUpperCase() + name.slice(1)}</a></li>)}
@@ -43,7 +43,7 @@ export function Footer() {
         </div>
         <div class="footer-base">
           <span>© {new Date().getFullYear()} {s.site.name} · {s.site.school} Newspaper Club</span>
-          <span><a href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Back to top <Icon name="arrow-right" size={12} class="up" /></a></span>
+          <span><a href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Back to Top <Icon name="arrow-right" size={12} class="up" /></a></span>
         </div>
       </div>
     </footer>

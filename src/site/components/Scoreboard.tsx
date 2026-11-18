@@ -74,8 +74,8 @@ export function Scoreboard({ limit = 6, full = false }: { limit?: number; full?:
       <header class="scoreboard-head">
         <span class="scoreboard-icon"><Icon name="trophy" size={18} /></span>
         <div>
-          <h2 id="scores-h">Falcons Scoreboard</h2>
-          <p class="small">Results &amp; schedule · {site.settings.site.school}</p>
+          <h2 id="scores-h">Falcon Scoreboard</h2>
+          <p class="small">Results + Schedule · {site.settings.site.school}</p>
         </div>
       </header>
       <div class="tabs" role="tablist" aria-label="Filter games">
@@ -92,7 +92,7 @@ export function Scoreboard({ limit = 6, full = false }: { limit?: number; full?:
       )}
       {!full && (
         <footer class="scoreboard-foot">
-          <a href={href('/scores')}>Full schedule &amp; results <Icon name="chevron-right" size={14} /></a>
+          <a href={href('/scores')}>Full Schedule + Results <Icon name="chevron-right" size={14} /></a>
         </footer>
       )}
     </section>

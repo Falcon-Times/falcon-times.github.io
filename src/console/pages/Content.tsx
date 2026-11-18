@@ -34,7 +34,7 @@ export function Scoreboard() {
       { key: 'status', label: 'Status', type: 'select', options: [
         { value: 'scheduled', label: 'Scheduled' }, { value: 'final', label: 'Final (enter score)' },
         { value: 'postponed', label: 'Postponed' }, { value: 'cancelled', label: 'Cancelled' }] },
-      { key: 'our_score', label: 'Falcons score', type: 'number', showIf: (r) => r.status === 'final' },
+      { key: 'our_score', label: 'Falcon score', type: 'number', showIf: (r) => r.status === 'final' },
       { key: 'their_score', label: 'Opponent score', type: 'number', showIf: (r) => r.status === 'final' },
     ],
     prepare: (v) => {

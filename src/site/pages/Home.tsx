@@ -54,11 +54,6 @@ export function Home() {
         </section>
         <aside class="stack side" style={{ '--stack': '24px' }}>
           <PollCard />
-          {site.settings.hotline.enabled && <TipCard />}
-          <section class="panel standards">
-            <h2><Icon name="shield-check" size={18} /> Our standards</h2>
-            <ul class="ticks">{site.settings.standards.points.map((p) => <li key={p}><Icon name="check" size={15} />{p}</li>)}</ul>
-          </section>
         </aside>
       </div>
 
@@ -76,23 +71,33 @@ export function Home() {
         );
       })}
 
-      <section class="panel meet" aria-labelledby="meet-h">
-        <div class="panel-head">
-          <div><span class="eyebrow">Masthead</span><h2 id="meet-h">Meet our section leaders</h2></div>
-          <a class="btn" href={href('/staff')}>Full staff <Icon name="arrow-right" size={16} /></a>
+      {/* After all the news: the tip line, our standards and who we are. */}
+      <div class="closing">
+        <div class="closing-grid">
+          {site.settings.hotline.enabled && <TipCard />}
+          <section class="panel standards">
+            <h2><Icon name="shield-check" size={18} /> Our standards</h2>
+            <ul class="ticks">{site.settings.standards.points.map((p) => <li key={p}><Icon name="check" size={15} />{p}</li>)}</ul>
+          </section>
         </div>
-        <ul class="leaders">
-          {staff.filter((p) => p.lead_of.length > 0).map((p) => (
-            <li key={p.id}>
-              <a href={href(`/staff/${p.slug}`)} class="leader">
-                <Avatar name={p.name} src={p.photo_url} size={56} />
-                <strong>{p.name}</strong>
-                <span class="small muted">{p.lead_of.map((id) => sectionById.get(id)?.name).filter(Boolean).join(' · ')}</span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      </section>
+        <section class="panel meet" aria-labelledby="meet-h">
+          <div class="panel-head">
+            <div><span class="eyebrow">Masthead</span><h2 id="meet-h">Meet our section leaders</h2></div>
+            <a class="btn" href={href('/staff')}>Full staff <Icon name="arrow-right" size={16} /></a>
+          </div>
+          <ul class="leaders">
+            {staff.filter((p) => p.lead_of.length > 0).map((p) => (
+              <li key={p.id}>
+                <a href={href(`/staff/${p.slug}`)} class="leader">
+                  <Avatar name={p.name} src={p.photo_url} size={56} />
+                  <strong>{p.name}</strong>
+                  <span class="small muted">{p.lead_of.map((id) => sectionById.get(id)?.name).filter(Boolean).join(' · ')}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
     </div>
   );
 }

@@ -79,6 +79,60 @@ test.describe('public pages', () => {
   });
 });
 
+test.describe('front page layout and wording', () => {
+  test('the tip line, standards and section leaders close the page instead of interrupting the news', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Latest stories' })).toBeVisible();
+    // The sidebar next to the latest stories holds only the poll.
+    const side = page.locator('.page-home .split .side');
+    await expect(side.locator('.tip-card, .standards, .meet')).toHaveCount(0);
+    await expect(side.getByRole('heading', { name: 'Falcon Pulse Poll' })).toBeVisible();
+
+    // Everything about the newsroom comes after the last news section, in this order.
+    const y = async (sel: string) => (await page.locator(sel).first().boundingBox())!.y;
+    const lastNews = await page.locator('.page-home > section[aria-labelledby^="sec-"]').last().boundingBox();
+    const tip = await y('.closing .tip-card');
+    const standards = await y('.closing .standards');
+    const leaders = await y('.closing .meet');
+    expect(tip).toBeGreaterThan(lastNews!.y + lastNews!.height - 1);
+    expect(standards).toBeGreaterThan(lastNews!.y + lastNews!.height - 1);
+    expect(leaders).toBeGreaterThan(Math.max(tip, standards));
+    // …and the footer is the only thing below them.
+    expect(await y('footer.footer')).toBeGreaterThan(leaders);
+  });
+
+  test('"Falcon" is singular everywhere, like "The Falcon Times"', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Falcon Scoreboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Falcon Pulse Poll' })).toBeVisible();
+    expect(await page.locator('body').innerText()).not.toMatch(/\bFalcons\b/);
+  });
+
+  test('sub-section names use "+" like the rest of the site', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Latest stories' })).toBeVisible();
+    // The sub-section menus are collapsed, so read the text rather than what is visible.
+    const nav = (await page.locator('nav[aria-label="Sections"]').textContent()) ?? '';
+    expect(nav).toContain('Clubs + Activities');
+    expect(nav).not.toContain('&');
+    expect(await page.locator('main').innerText()).not.toMatch(/ & /);
+  });
+
+  test('footer links are capitalised the same way and use one connector', async ({ page }) => {
+    await page.goto('/');
+    const links = (await page.locator('footer.footer a, footer.footer .btn').allInnerTexts()).map((t) => t.trim()).filter(Boolean);
+    expect(links.length).toBeGreaterThan(8);
+    const small = new Set(['a', 'an', 'the', 'of', 'and', 'or', 'to', 'for', 'in', 'on', '+']);
+    // Title Case: every word starts with a capital, except small words in the middle.
+    const bad = links.filter((t) => t.split(/\s+/).some((w, i) => /^[a-z]/.test(w) && !(i > 0 && small.has(w))));
+    expect(bad).toEqual([]);
+    // "+" or "&", not both.
+    const connectors = new Set(links.flatMap((t) => t.match(/[+&]/g) ?? []));
+    expect(connectors.size).toBeLessThanOrEqual(1);
+    expect(links).toEqual(expect.arrayContaining(['Meet the Staff', 'Scores + Schedule', 'About + Standards']));
+  });
+});
+
 test.describe('daily spark ticker', () => {
   test('a quote wider than the bar scrolls to its end instead of being cut off', async ({ page }) => {
     const client = db();

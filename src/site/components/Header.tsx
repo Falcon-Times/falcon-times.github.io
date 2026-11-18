@@ -160,7 +160,7 @@ export function Nav({ route }: { route: Route }) {
         </button>
         <ul id="nav-list" class={`nav-list ${mobile ? 'open' : ''}`}>
           <li class="nav-item">
-            <a class={`nav-link ${route.path === '/' ? 'active' : ''}`} href={href('/')}><Icon name="newspaper" size={15} /> Front page</a>
+            <a class={`nav-link ${route.path === '/' ? 'active' : ''}`} href={href('/')}><Icon name="newspaper" size={15} /> Front Page</a>
           </li>
           {sections.map((s) => (
             <li key={s.id} class={`nav-item ${open === s.id ? 'open' : ''}`}>

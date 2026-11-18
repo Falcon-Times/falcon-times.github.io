@@ -90,7 +90,7 @@ export function TipModal() {
   const isOpen = open.use();
   if (!isOpen) return null;
   return (
-    <Modal title="Tip &amp; Feedback Line" onClose={() => open.set(false)}>
+    <Modal title="Tip + Feedback Line" onClose={() => open.set(false)}>
       <TipForm onDone={() => open.set(false)} />
     </Modal>
   );
@@ -102,7 +102,7 @@ export function TipCard() {
       <div class="row" style={{ '--gap': '12px', 'align-items': 'flex-start' }}>
         <span class="tip-icon"><Icon name="megaphone" size={22} /></span>
         <div>
-          <span class="eyebrow">Confidential &amp; moderated</span>
+          <span class="eyebrow">Confidential + Moderated</span>
           <h2>Anonymous tip line</h2>
         </div>
       </div>

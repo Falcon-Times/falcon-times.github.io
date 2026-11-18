@@ -41,7 +41,7 @@ export function SearchPage({ query }: { query: string }) {
 export function ScoresPage() {
   return (
     <div class="stack" style={{ '--stack': '24px' }}>
-      <header class="page-head"><span class="eyebrow">Athletics</span><h1>Scores &amp; schedule</h1></header>
+      <header class="page-head"><span class="eyebrow">Athletics</span><h1>Scores + Schedule</h1></header>
       <div style={{ maxWidth: '720px' }}><Scoreboard full /></div>
     </div>
   );

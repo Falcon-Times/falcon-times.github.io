@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { timeAgo } from '@/lib/format';
 import { href } from '@/lib/router';
 import { Icon } from '@/ui/Icon';
-import { listArticles, countTable, countWhere, type ArticleListItem } from '../api';
+import { listArticles, countTable, type ArticleListItem } from '../api';
 import { useMe } from '../auth';
 import { useRefs } from '../refs';
 import { STATUS_BADGE, STATUS_LABEL } from './Articles';
@@ -21,12 +21,10 @@ export function Dashboard({ admin = false }: { admin?: boolean }) {
   const me = useMe();
   const { sectionName } = useRefs();
   const [articles, setArticles] = useState<ArticleListItem[] | null>(null);
-  const [newTips, setNewTips] = useState<number | null>(null);
   const [accounts, setAccounts] = useState<number | null>(null);
   useEffect(() => {
     listArticles().then(setArticles).catch(() => setArticles([]));
     if (admin) countTable('profiles').then(setAccounts).catch(() => undefined);
-    if (me.isEditor) countWhere('tips', 'status', 'new').then(setNewTips).catch(() => setNewTips(null));
   }, []);
 
   const mine = (articles ?? []).filter((a) => me.isAdmin || me.isPhotographer || a.created_by === me.userId || (me.isEditor && me.profile.sections.includes(a.section_id)));
@@ -48,7 +46,6 @@ export function Dashboard({ admin = false }: { admin?: boolean }) {
           ? <Stat label="Stories without a cover photo" value={articles ? mine.filter((a) => !a.cover_image_url && a.status !== 'archived').length : '…'} icon="camera" to="/articles" tone="warn" />
           : <Stat label="My drafts" value={articles ? mine.filter((a) => a.status === 'draft' && (a.created_by === me.userId || me.isEditor)).length : '…'} icon="pencil" to="/articles" />}
         <Stat label="Published this week" value={articles ? mine.filter((a) => a.status === 'published' && a.published_at && new Date(a.published_at).getTime() > weekAgo).length : '…'} icon="newspaper" />
-        {me.isEditor && <Stat label="New tips" value={newTips ?? '…'} icon="megaphone" to="/tips" tone="gold" />}
         {admin && <Stat label="Accounts" value={accounts ?? '…'} icon="users" to="/people" />}
       </div>
 

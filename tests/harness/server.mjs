@@ -309,13 +309,6 @@ const server = http.createServer(async (req, res) => {
       const u = await createUser(b);
       return send(res, 200, { id: u.id });
     }
-    // test control: POST /__test/tips {message,category?,section_id?}: a tip "received earlier"
-    // (the public tip line is closed, so the API can't create one any more)
-    if (path === '/__test/tips' && req.method === 'POST') {
-      const b = JSON.parse((await readBody(req)).toString());
-      await pool.query('insert into public.tips (category, section_id, message) values ($1, $2, $3)', [b.category ?? 'story', b.section_id ?? null, b.message]);
-      return send(res, 200, { ok: true });
-    }
     if (path === '/__test/health') return send(res, 200, { ok: true });
     if (path === '/__test/objects') return send(res, 200, [...objects.keys()]);   // keys of stored files, e.g. media/<user>/2026/<id>.webp
     if (path === '/__test/anon-key') return send(res, 200, Buffer.from(ANON_KEY));

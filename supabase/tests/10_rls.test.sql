@@ -77,19 +77,12 @@ insert into public.articles (id, slug, title, section_id, status, published_at, 
   ('a0000000-0000-0000-0000-000000000003', 'draft-sports', 'Draft sports', 'sports', 'draft', null, '00000000-0000-0000-0000-000000000005'),
   ('a0000000-0000-0000-0000-000000000004', 'future-news', 'Scheduled', 'school-news', 'published', now() + interval '2 days', '00000000-0000-0000-0000-000000000004');
 
-insert into public.tips (id, category, section_id, message) values
-  ('b0000000-0000-0000-0000-000000000001', 'story', 'sports', 'A sports tip about the team'),
-  ('b0000000-0000-0000-0000-000000000002', 'story', 'school-news', 'A school news tip for editors'),
-  ('b0000000-0000-0000-0000-000000000003', 'feedback', null, 'A general website feedback tip'),
-  ('b0000000-0000-0000-0000-000000000004', 'story', null, 'This is an anonymous tip');   -- received before the public tip line was closed
-
 -- ------------------------------------------------------------ anonymous
 select tests.anon();
 select tests.eq(tests.count('select 1 from public.articles'), 2::bigint, 'anon sees seeded welcome + published news only (no drafts / scheduled)');
 select tests.eq(tests.count($$select 1 from public.articles where slug in ('draft-news','future-news','draft-sports')$$), 0::bigint, 'anon cannot see drafts or scheduled articles');
 select tests.eq(tests.count('select 1 from public.sections') > 5, true, 'anon reads sections');
 select tests.eq(tests.count('select 1 from public.staff_members') > 10, true, 'anon reads staff');
-select tests.fails('select * from public.tips', 'anon cannot read tips', 'permission denied');
 select tests.fails('select * from public.profiles', 'anon cannot read profiles', 'permission denied');
 select tests.fails('select * from public.audit_log', 'anon cannot read audit log', 'permission denied');
 select tests.fails('select * from public.article_comments', 'anon cannot read comments', 'permission denied');
@@ -97,8 +90,8 @@ select tests.fails($$update public.articles set title = 'x'$$, 'anon cannot upda
 select tests.fails($$insert into public.articles (slug, title, section_id) values ('x','x','sports')$$, 'anon cannot insert articles', 'permission denied');
 
 select tests.eq(tests.count($$select 1 from public.site_settings where key = 'hotline'$$), 0::bigint, 'the old tip line setting is gone');
--- The public tip line is closed: the website has no tip form and the API takes no new tips.
-select tests.fails($$insert into public.tips (category, message, contact) values ('story', 'A tip from the public', null)$$, 'anon cannot submit tips any more', 'permission denied');
+-- The tip line is gone: no form on the site, no inbox in the newsroom, and no table behind it.
+select tests.eq(to_regclass('public.tips') is null, true, 'the tips table no longer exists');
 
 -- anon RPCs
 select tests.anon();
@@ -129,7 +122,7 @@ select tests.fails('select public.bootstrap_super_admin(''admin@example.test'')'
 select tests.login('00000000-0000-0000-0000-000000000006');
 select tests.eq(private.is_staff(), false, 'user without profile has no staff rights');
 select tests.fails($$insert into public.articles (slug, title, section_id, created_by) values ('np','np','sports','00000000-0000-0000-0000-000000000006')$$, 'user without profile cannot write', 'row-level security');
-select tests.eq(tests.count('select 1 from public.tips'), 0::bigint, 'user without profile reads no tips');
+select tests.eq(tests.count('select 1 from public.audit_log'), 0::bigint, 'user without profile reads no activity log');
 select tests.login('00000000-0000-0000-0000-000000000007');
 select tests.eq(private.is_staff(), false, 'inactive account has no rights');
 
@@ -151,8 +144,7 @@ select tests.affects($$update public.articles set title = 'hax' where slug = 'pu
 select tests.affects($$update public.articles set title = 'hax' where slug = 'draft-sports'$$, 0, 'writer cannot edit others'' drafts');
 select tests.affects($$delete from public.articles where slug = 'draft-sports'$$, 0, 'writer cannot delete others'' drafts');
 select tests.affects($$delete from public.articles where slug = 'pub-news'$$, 0, 'writer cannot delete published article');
-select tests.eq(tests.count('select 1 from public.tips'), 0::bigint, 'writer reads no tips');
-select tests.fails($$insert into public.tips (category, message) values ('story', 'A tip from a signed-in user')$$, 'signed-in users cannot submit tips either', 'permission denied');
+select tests.eq(tests.count('select 1 from public.audit_log'), 0::bigint, 'writer reads no activity log');
 select tests.eq(tests.count('select 1 from public.profiles'), 1::bigint, 'writer sees only own profile');
 update public.profiles set role = 'admin', sections = '{sports,school-news}', active = true where id = auth.uid();
 select tests.eq((select role from public.profiles where id = auth.uid()), 'writer', 'writer cannot escalate own role');
@@ -190,13 +182,6 @@ select tests.eq(tests.count($$select 1 from public.articles where slug = 'w-new'
 select tests.affects($$update public.articles set title = 'nope' where slug = 'draft-sports'$$, 0, 'editor cannot edit other sections');
 select tests.fails($$update public.articles set section_id = 'sports' where slug = 'draft-news'$$, 'editor cannot move article into foreign section', 'row-level security');
 select tests.affects($$delete from public.articles where slug = 'w-new'$$, 0, 'editor cannot delete published articles');
--- tips: own section + unassigned only
-select tests.eq(tests.count('select 1 from public.tips'), 3::bigint, 'news editor sees news tip + general tips (+ the anonymous one)');
-select tests.eq(tests.count($$select 1 from public.tips where section_id = 'sports'$$), 0::bigint, 'news editor cannot see sports tips');
-update public.tips set status = 'in_review', internal_notes = 'Looking into it', message = 'REWRITTEN' where id = 'b0000000-0000-0000-0000-000000000002';
-select tests.eq((select status from public.tips where id = 'b0000000-0000-0000-0000-000000000002'), 'in_review', 'editor triages tips');
-select tests.eq((select message from public.tips where id = 'b0000000-0000-0000-0000-000000000002'), 'A school news tip for editors', 'editor cannot rewrite a tip''s message');
-select tests.affects($$delete from public.tips where id = 'b0000000-0000-0000-0000-000000000002'$$, 0, 'editor cannot delete tips');
 select tests.affects($$update public.games set status = 'cancelled'$$, 0, 'news editor cannot edit games');
 insert into public.polls (question, options) values ('Pick one?', '[{"id":"a","label":"A"},{"id":"b","label":"B"}]');
 select tests.eq(tests.count($$select 1 from public.polls where question = 'Pick one?'$$), 1::bigint, 'editors create polls');
@@ -208,21 +193,19 @@ select tests.login('00000000-0000-0000-0000-000000000002');
 insert into public.games (sport, opponent, starts_at, status, our_score, their_score)
   values ('Football', 'Somewhere HS', now() - interval '1 day', 'final', 21, 14);
 select tests.eq(tests.count('select 1 from public.games'), 1::bigint, 'sports editor manages scoreboard');
-select tests.eq(tests.count('select 1 from public.tips'), 3::bigint, 'sports editor sees sports tip + general tips');
 
 -- ------------------------------------------------------------ admin, password only (no 2FA yet)
 select tests.login('00000000-0000-0000-0000-000000000001', 'aal1');
 select tests.eq(public.is_admin(), false, 'admin without 2FA has no admin rights');
 select tests.eq(private.is_staff(), false, 'admin without 2FA has no staff rights either');
 select tests.eq(tests.count('select 1 from public.profiles'), 1::bigint, 'admin without 2FA only sees own profile');
-select tests.eq(tests.count('select 1 from public.tips'), 0::bigint, 'admin without 2FA cannot read tips');
+select tests.eq(tests.count('select 1 from public.audit_log'), 0::bigint, 'admin without 2FA cannot read the activity log');
 select tests.affects($$update public.sections set name = 'Hacked' where id = 'sports'$$, 0, 'admin without 2FA cannot edit sections');
 
 -- ------------------------------------------------------------ admin with 2FA
 select tests.login('00000000-0000-0000-0000-000000000001', 'aal2');
 select tests.eq(public.is_admin(), true, 'admin with 2FA is admin');
 select tests.eq(tests.count('select 1 from public.profiles'), 6::bigint, 'admin reads all profiles');
-select tests.eq(tests.count('select 1 from public.tips'), 4::bigint, 'admin reads all tips');
 update public.profiles set role = 'editor', sections = '{sports}' where id = '00000000-0000-0000-0000-000000000005';
 select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000005'), 'editor', 'admin changes roles');
 -- an admin can't change their own role (only super admins manage admin accounts); the last admin can't be disabled
@@ -235,10 +218,7 @@ update public.site_settings set value = jsonb_set(value, '{tagline}', '"New tagl
 select tests.eq((select value ->> 'tagline' from public.site_settings where key = 'site'), 'New tagline', 'admin edits settings');
 insert into public.staff_members (slug, name) values ('new-person', 'New Person');
 select tests.eq(tests.count($$select 1 from public.staff_members where slug = 'new-person'$$), 1::bigint, 'admin adds staff');
-delete from public.tips where id = 'b0000000-0000-0000-0000-000000000001';
-select tests.eq(tests.count('select 1 from public.tips'), 3::bigint, 'admin deletes tips');
 select tests.eq(tests.count('select 1 from public.audit_log') >= 5, true, 'admin reads audit log');
-select tests.eq(tests.count($$select 1 from public.audit_log where summary like '%Looking into it%' or summary like '%tip%'$$), 0::bigint, 'audit log never contains tip contents');
 
 -- ------------------------------------------------------------ staff bio self-service
 select tests.logout();
@@ -307,7 +287,7 @@ select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-000
 select tests.eq(public.redeem_mfa_bypass(substr(current_setting('tests.code'), 1, 3) || ' - ' || substr(current_setting('tests.code'), 4, 3) || '-' || substr(current_setting('tests.code'), 7)), true, 'the right code works, however it is typed');
 select tests.eq(public.mfa_bypass_active(), true, 'the session is now bypassed');
 select tests.eq(public.is_admin(), true, 'a bypassed admin session has admin rights');
-select tests.eq(tests.count('select 1 from public.tips'), 3::bigint, 'and can read admin-only data');
+select tests.eq(tests.count('select 1 from public.audit_log') >= 1, true, 'and can read admin-only data');
 select tests.eq(public.redeem_mfa_bypass(current_setting('tests.code')), false, 'a code works only once');
 select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000003');
 select tests.eq(public.is_admin(), false, 'a different login session is not bypassed');
@@ -377,7 +357,7 @@ select tests.login('00000000-0000-0000-0000-000000000021', 'aal2');
 select tests.eq(public.is_super_admin(), true, 'a super admin with 2FA is a super admin');
 select tests.eq(public.is_admin(), true, 'and is an admin');
 select tests.eq(private.is_editor(), true, 'and an editor');
-select tests.eq(tests.count('select 1 from public.tips') >= 3, true, 'reads tips like an admin');
+select tests.eq(tests.count('select 1 from public.audit_log') >= 1, true, 'reads the activity log like an admin');
 update public.sections set name = 'Sports (super)' where id = 'sports';
 select tests.eq((select name from public.sections where id = 'sports'), 'Sports (super)', 'edits sections like an admin');
 
@@ -448,7 +428,7 @@ grant select on photog_before to public;
 select tests.login('00000000-0000-0000-0000-000000000031');
 select tests.eq(tests.count('select 1 from public.articles'), (select count(*) from photog_before)::bigint, 'a photographer reads every story: any section, any status');
 select tests.eq(tests.count($$select 1 from public.articles where slug in ('draft-news','draft-sports','future-news','pub-news')$$), 4::bigint, 'including other people''s drafts and scheduled stories');
-select tests.eq(tests.count('select 1 from public.tips'), 0::bigint, 'but no tips');
+select tests.eq(tests.count('select 1 from public.audit_log'), 0::bigint, 'but no activity log');
 select tests.eq(tests.count('select 1 from public.polls'), (select count(*) from public.polls where active)::bigint, 'and only the polls everyone sees');
 select tests.eq(tests.count('select 1 from public.article_comments'), 0::bigint, 'and no internal notes');
 select tests.eq(tests.count('select 1 from public.profiles'), 1::bigint, 'and only their own profile');
@@ -669,20 +649,6 @@ select tests.eq(tests.count($$select 1 from public.staff_members where slug = 'd
 select tests.eq((select staff_member_id from public.profiles where id = '00000000-0000-0000-0000-000000000025'), null::uuid, 'and the admin account is only unlinked');
 select tests.eq(tests.count($$select 1 from public.audit_log where table_name = 'staff_members' and op = 'DELETE'$$) >= 4, true, 'deletions are in the activity log');
 select tests.logout();
-
--- ------------------------------------------------------------ server-side invariants
-select tests.logout();
-select tests.eq((select created_at > now() - interval '1 minute' from public.tips order by created_at desc limit 1), true, 'tip timestamps are server-controlled');
-do $$
-begin
-  for i in 1..60 loop
-    insert into public.tips (category, message) values ('other', 'flood test message number ' || i);
-  end loop;
-  raise exception 'flood protection did not trigger';
-exception when others then
-  if sqlerrm !~ 'busy' then raise; end if;
-  raise notice 'ok - tip flood protection (%)', sqlerrm;
-end $$;
 
 rollback;
 \echo ALL RLS TESTS PASSED

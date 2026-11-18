@@ -157,7 +157,6 @@ export function Sections() {
 export function StaffRoster() {
   const { sectionName, reload: reloadRefs } = useRefs();
   const me = useMe();
-  const [removing, setRemoving] = useState<{ person: StaffMember; reload: () => void } | null>(null);
   const config: CrudConfig<StaffMember> = {
     title: 'Staff roster', singular: 'staff member', table: 'staff_members', orderBy: 'sort_order', canEdit: true, canDelete: false,
     intro: 'Everyone listed on “Meet the newsroom”, and who can be credited in a byline. This is separate from login accounts — people can appear here without an account.',
@@ -185,14 +184,12 @@ export function StaffRoster() {
       delete v.created_at;
       return v;
     },
-    // Deleting gets its own dialog (what changes first), instead of the generic confirm.
-    extraActions: (row, reload) => <button class="btn btn-sm btn-danger" aria-label={`Delete ${row.name}`} onClick={() => setRemoving({ person: row, reload })}><Icon name="trash" size={13} /> Delete</button>,
+    // Deleting lives in the Edit dialog and has its own confirmation that says what will change first.
+    customDelete: ({ row, onClose, onDone }) => (
+      <StaffRemoveModal person={row} onClose={onClose} onDone={() => { reloadRefs(); void me.refresh(); onDone(); }} />
+    ),
+    extraActions: () => null,
   };
-  return (
-    <>
-      <CrudPage config={config} />
-      {removing && <StaffRemoveModal person={removing.person} onClose={() => setRemoving(null)} onDone={() => { removing.reload(); reloadRefs(); void me.refresh(); setRemoving(null); }} />}
-    </>
-  );
+  return <CrudPage config={config} />;
 }
 

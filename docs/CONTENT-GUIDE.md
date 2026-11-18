@@ -70,7 +70,6 @@ for every photo, and credit yourself.
 
 | Tool | Use it for |
 | --- | --- |
-| **Tip line** | Tips received before the public tip line was closed (no new ones arrive). Review them. Set a status, assign it, add private notes. Only leaders and admins see these — keep them confidential. If the sender left contact details, only use them to follow up on the tip. |
 | **Scoreboard** | (Sports) add games, then enter final scores. Feeds the front page. |
 | **Polls** | Create a poll (2–8 answers). Active polls appear on the front page; you can reset votes. |
 | **Announcement bar** | A gold banner above the masthead — meetings, deadlines, breaking news. |

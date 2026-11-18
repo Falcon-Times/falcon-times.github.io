@@ -5,8 +5,6 @@ export type Role = 'writer' | 'editor' | 'photographer' | 'admin' | 'super_admin
 /** Admins and super admins: full site access (and two-factor is required). */
 export const isAdminRole = (r: Role) => r === 'admin' || r === 'super_admin';
 export type ArticleStatus = 'draft' | 'submitted' | 'published' | 'archived';
-export type TipStatus = 'new' | 'in_review' | 'resolved' | 'dismissed';
-export type TipCategory = 'story' | 'correction' | 'letter' | 'poll' | 'scores' | 'feedback' | 'other';
 export type GameStatus = 'scheduled' | 'final' | 'postponed' | 'cancelled';
 
 export interface Profile {
@@ -92,19 +90,6 @@ export interface GalleryImage {
   updated_at: string | null;
 }
 
-export interface Tip {
-  id: string;
-  category: TipCategory;
-  section_id: string | null;
-  message: string;
-  contact: string | null;
-  status: TipStatus;
-  assigned_to: string | null;
-  internal_notes: string;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface PollOption {
   id: string;
   label: string;
@@ -183,13 +168,3 @@ export interface SiteData {
   quotes: Quote[];
   announcements: Announcement[];
 }
-
-export const TIP_CATEGORIES: { id: TipCategory; label: string }[] = [
-  { id: 'story', label: 'Story idea / news tip' },
-  { id: 'correction', label: 'Correction for a published article' },
-  { id: 'letter', label: 'Letter to the editor' },
-  { id: 'scores', label: 'Score or athlete shout-out' },
-  { id: 'poll', label: 'Poll topic suggestion' },
-  { id: 'feedback', label: 'Website feedback' },
-  { id: 'other', label: 'Something else' },
-];

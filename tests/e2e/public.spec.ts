@@ -55,7 +55,7 @@ test.describe('public pages', () => {
     await ctx.close();
   });
 
-  test('the public client never exposes tips or profiles', async ({ page }) => {
+  test('the public client never exposes profiles or the activity log', async ({ page }) => {
     await page.goto('/');
     const result = await page.evaluate(async () => {
       const base = (window as unknown as { __SUPABASE_URL__?: string }).__SUPABASE_URL__ ?? 'http://127.0.0.1:54330';
@@ -71,8 +71,8 @@ test.describe('public pages', () => {
         isStaff: await rpc('is_staff'), editsSection: await rpc('edits_section'), canWrite: await rpc('can_write_section'), effective: await rpc('effective_role'),
       };
     });
-    expect(result.tips).toBe(401);
-    expect(result.tipSubmission).toBe(401); // the tip line is closed: no new tips through the API either
+    expect(result.tips).toBe(404);          // the tip line is gone, table and all
+    expect(result.tipSubmission).toBe(404);
     expect(result.profiles).toBe(401);
     expect(result.audit).toBe(401);
     expect(result.articles).toBe(200);

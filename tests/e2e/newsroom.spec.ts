@@ -11,7 +11,6 @@ const EDITOR = { email: `editor-${stamp}@example.test`, temp: '', password: 'Edi
 const ADMIN2 = { email: `admin2-${stamp}@example.test`, temp: '', password: 'SecondAdm1nPass!!' };
 const PHOTO = { email: `photo-${stamp}@example.test`, temp: '', password: 'PhotoPassw0rd!!' };
 const HEADLINE = `Homecoming float wins big ${stamp}`;
-const TIP = `Someone should look into the cafeteria lines ${stamp}`;
 
 let admin: Page;
 const newPage = async (browser: Browser) => (await browser.newContext()).newPage();
@@ -30,15 +29,6 @@ test('public front page renders content from the database', async ({ page }) => 
   // dropdown sub-sections
   await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Sports' }).hover();
   await expect(page.getByRole('link', { name: 'Athlete Spotlights' })).toBeVisible();
-});
-
-test('the public site has no tip line, but tips received earlier stay in the newsroom', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Latest stories' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /tip/i })).toHaveCount(0);
-  // A tip that arrived before the tip line was closed (the API no longer accepts new ones).
-  const r = await fetch('http://127.0.0.1:54330/__test/tips', { method: 'POST', body: JSON.stringify({ message: TIP }) });
-  expect(r.ok).toBe(true);
 });
 
 test('a reader can vote in the poll, once', async ({ page }) => {
@@ -158,7 +148,6 @@ test('writer: forced password change, drafts and submits a story', async ({ brow
   await page.goto('/newsroom/');
 
   // Writers have no leader tools
-  await expect(page.getByRole('link', { name: 'Tip line' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Scoreboard' })).toHaveCount(0);
 
   await page.getByRole('link', { name: 'Stories' }).click();
@@ -265,15 +254,6 @@ test('section leader reviews, publishes and later updates the story', async ({ b
   await page.getByRole('button', { name: 'Save new password' }).click();
   await expect(page.getByRole('heading', { name: /Eddie/ })).toBeVisible();
 
-  // sees the tip (editors only), triages it
-  await page.getByRole('link', { name: 'Tip line' }).click();
-  await expect(page.getByText(TIP)).toBeVisible();
-  await page.getByText(TIP).click();
-  await page.getByLabel('Status').selectOption('in_review');
-  await page.getByLabel('Private notes').fill('Asking the cafeteria manager.');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('Tip updated')).toBeVisible();
-
   // publish
   await page.getByRole('link', { name: 'Stories' }).click();
   await page.getByRole('link', { name: HEADLINE }).click();
@@ -324,7 +304,6 @@ test('a photographer sees every story but can only change its photos', async ({ 
   await page.getByRole('button', { name: 'Save new password' }).click();
   await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Pat/ })).toBeVisible();
   await expect(page.locator('.who .badge')).toHaveText('Photographer');
-  await expect(page.getByRole('link', { name: 'Tip line' })).toHaveCount(0);
 
   // Every story is listed (they didn't write it, and it isn't in a section of theirs), but they can't start one.
   await page.getByRole('link', { name: 'Stories', exact: true }).click();
@@ -720,25 +699,45 @@ test('admin deletes someone from the staff roster, after being told what it chan
   await readers.goto('/#/staff');
   await expect(readers.getByText(NAME).first()).toBeVisible();
 
-  // Cancelling changes nothing.
+  // The roster rows have no Delete button; deleting lives inside the Edit dialog (like accounts).
   const row = admin.getByRole('row', { name: new RegExp(NAME) });
-  await row.getByRole('button', { name: `Delete ${NAME}` }).click();
+  await expect(row.getByRole('button', { name: /Delete/ })).toHaveCount(0);
+  const openEdit = async (name: string) => {
+    await admin.getByRole('row', { name: new RegExp(name) }).getByRole('button', { name: /Edit/ }).click();
+    return admin.getByRole('dialog', { name: 'Edit staff member' });
+  };
+
+  // A brand-new person has nothing to delete yet.
+  await admin.getByRole('button', { name: /New staff member/ }).click();
+  await expect(admin.getByRole('dialog', { name: 'New staff member' }).getByRole('button', { name: 'Delete' })).toHaveCount(0);
+  await admin.getByRole('dialog', { name: 'New staff member' }).getByRole('button', { name: 'Cancel' }).click();
+
+  // Cancelling the confirmation changes nothing, and Esc closes only the confirmation.
+  let edit = await openEdit(NAME);
+  await edit.getByRole('button', { name: 'Delete' }).click();
   const dialog = admin.getByRole('dialog', { name: `Delete ${NAME}?` });
   await expect(dialog).toContainText('credited on 1 story (1 published)');
   await expect(dialog).toContainText('No login account is linked to them');
-  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await admin.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(edit).toBeVisible();
+  await edit.getByRole('button', { name: 'Cancel' }).click();
   await expect(row).toBeVisible();
 
   // "Unlist instead" hides them without deleting.
-  await admin.getByRole('row', { name: new RegExp(KEEP) }).getByRole('button', { name: `Delete ${KEEP}` }).click();
+  edit = await openEdit(KEEP);
+  await edit.getByRole('button', { name: 'Delete' }).click();
   await admin.getByRole('dialog', { name: `Delete ${KEEP}?` }).getByRole('button', { name: 'Unlist instead' }).click();
   await expect(admin.getByText(`${KEEP} is no longer listed`)).toBeVisible();
+  await expect(admin.getByRole('dialog')).toHaveCount(0);
   await expect(admin.getByRole('row', { name: new RegExp(KEEP) }).locator('.badge', { hasText: 'No' })).toBeVisible();
 
   // Deleting removes them everywhere; the story stays.
-  await row.getByRole('button', { name: `Delete ${NAME}` }).click();
+  edit = await openEdit(NAME);
+  await edit.getByRole('button', { name: 'Delete' }).click();
   await admin.getByRole('dialog', { name: `Delete ${NAME}?` }).getByRole('button', { name: 'Delete permanently' }).click();
   await expect(admin.getByText(`${NAME} was deleted from the roster`)).toBeVisible();
+  await expect(admin.getByRole('dialog')).toHaveCount(0);
   await expect(row).toHaveCount(0);
   const left = await client.query(`select (select count(*) from public.staff_members where name = $1)::int as people, (select count(*) from public.articles where title = $2 and cardinality(byline_ids) >= 0)::int as stories,
     (select count(*) from public.articles a, public.staff_members s where a.title = $2 and s.id = any (a.byline_ids) and s.name = $1)::int as credited`, [NAME, HEADLINE]);

@@ -169,10 +169,7 @@ In the admin panel → **People & access → Add account**.
 
 ## Day-to-day
 
-* **The public tip line is closed** — the website has no tip form and the database accepts no new tips.
-  Tips received earlier stay in *Tip line* (section leaders see tips for their own sections plus general
-  ones; admins see all and can delete them).
-* **Activity log** (admin) shows who changed what. Tip text is never logged.
+* **Activity log** (admin) shows who changed what.
 * **Backups:** Supabase's dashboard (*Database → Backups*) has daily backups on paid plans. On the
   free plan, occasionally export the `articles` and `staff_members` tables from *Table Editor*.
 * **Free-tier pause:** Supabase pauses projects it considers idle after about a week, and plain API reads

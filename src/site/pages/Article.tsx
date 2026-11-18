@@ -11,13 +11,12 @@ import { toast } from '@/ui/Toast';
 import { useNews } from '../data';
 import { ArticleCard, Byline, SectionTag, Stamp, bylineStaff } from '../components/ArticleParts';
 import { Avatar } from '@/ui/Avatar';
-import { openTipLine } from '../components/Tip';
 import { NotFound } from './NotFound';
 
 const seen = safeStorage('session');
 
 export function ArticleView({ article, preview = false }: { article: Article; preview?: boolean }) {
-  const { staffById, articles } = useNews();
+  const { staffById, articles, site } = useNews();
   const html = useMemo(() => renderMarkdown(article.body_md), [article.body_md]);
   const people = bylineStaff(article, staffById);
   const related = articles.filter((a) => a.section_id === article.section_id && a.id !== article.id).slice(0, 3);
@@ -75,13 +74,13 @@ export function ArticleView({ article, preview = false }: { article: Article; pr
         </div>
       )}
 
-      {!preview && (
+      {!preview && site.settings.contact.email && (
         <aside class="feedback">
           <div>
             <strong><Icon name="message" size={16} /> Have a response or spotted a mistake?</strong>
-            <p class="small muted">We don’t run open comment sections. Send a Letter to the Editor or a correction through our tip line — anonymous is fine.</p>
+            <p class="small muted">We don’t run open comment sections. Email us a Letter to the Editor or a correction.</p>
           </div>
-          <button class="btn btn-primary" onClick={openTipLine}>Send feedback</button>
+          <a class="btn btn-primary" href={`mailto:${site.settings.contact.email}`}>Send feedback</a>
         </aside>
       )}
 

@@ -158,8 +158,8 @@ In the admin panel → **People & access → Add account**.
 
 ## 8. Make it yours (admin panel)
 
-* **Site settings** — tagline, the club's public contact email (leave blank to hide), social links, the
-  tip-line intro, editorial standards. *Put the club email here, not in the code.*
+* **Site settings** — tagline, the club's public contact email (leave blank to hide), social links,
+  editorial standards. *Put the club email here, not in the code.*
 * **Staff roster** — the public "Meet the newsroom" list and who can be credited in a byline. Add
   bios and photos (or let people add their own).
 * **Sections & menu** — rename sections, edit the dropdown sub-sections, reorder, or hide a team.
@@ -167,8 +167,9 @@ In the admin panel → **People & access → Add account**.
 
 ## Day-to-day
 
-* **Tips** arrive in *Tip line* (section leaders see tips for their own sections plus general ones).
-  Only they and admins can read them. Nothing identifying is stored unless the sender types it in.
+* **The public tip line is closed** — the website has no tip form and the database accepts no new tips.
+  Tips received earlier stay in *Tip line* (section leaders see tips for their own sections plus general
+  ones; admins see all and can delete them).
 * **Activity log** (admin) shows who changed what. Tip text is never logged.
 * **Backups:** Supabase's dashboard (*Database → Backups*) has daily backups on paid plans. On the
   free plan, occasionally export the `articles` and `staff_members` tables from *Table Editor*.
@@ -179,7 +180,7 @@ In the admin panel → **People & access → Add account**.
   guarantee**: only a paid Supabase plan prevents pausing. Keep GitHub Actions enabled, and if that workflow
   ever fails, GitHub emails the repo admins — look at it. If the project is paused anyway, unpause it from the
   dashboard (possible for 90 days after the pause date, per Supabase's notice); the public site keeps showing
-  its built-in starter content meanwhile, but sign-in, the panels, tips and polls are down.
+  its built-in starter content meanwhile, but sign-in, the panels and polls are down.
 
 ## Troubleshooting
 

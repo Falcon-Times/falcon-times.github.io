@@ -4,7 +4,7 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL, isConfigured } from './config';
 let anon: SupabaseClient | undefined;
 let session: SupabaseClient | undefined;
 
-/** Public reads and tip/poll submissions. Never carries a login, even if a
+/** Public reads and poll votes. Never carries a login, even if a
  *  staff member is signed in elsewhere on this origin. */
 export function anonClient(): SupabaseClient {
   if (!isConfigured) throw new Error('Backend is not configured.');

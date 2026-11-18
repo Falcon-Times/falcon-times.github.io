@@ -61,9 +61,10 @@ test.describe('public pages', () => {
       const base = (window as unknown as { __SUPABASE_URL__?: string }).__SUPABASE_URL__ ?? 'http://127.0.0.1:54330';
       const anon = await (await fetch(`${base}/__test/anon-key`)).text();
       const get = async (t: string) => (await fetch(`${base}/rest/v1/${t}?select=*`, { headers: { apikey: anon, Authorization: `Bearer ${anon}` } })).status;
+      const postTip = async () => (await fetch(`${base}/rest/v1/tips`, { method: 'POST', headers: { apikey: anon, Authorization: `Bearer ${anon}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ category: 'story', message: 'A tip sent straight to the API' }) })).status;
       const rpc = async (f: string) => (await fetch(`${base}/rest/v1/rpc/${f}`, { method: 'POST', headers: { apikey: anon, Authorization: `Bearer ${anon}`, 'Content-Type': 'application/json' }, body: '{}' })).status;
       return {
-        tips: await get('tips'), profiles: await get('profiles'), audit: await get('audit_log'), articles: await get('articles'),
+        tips: await get('tips'), tipSubmission: await postTip(), profiles: await get('profiles'), audit: await get('audit_log'), articles: await get('articles'),
         directoryView: await get('staff_directory'), keepaliveTable: await get('keepalive'),
         heartbeat: await rpc('keepalive'),
         // security-definer helpers live in a schema the API doesn't expose
@@ -71,6 +72,7 @@ test.describe('public pages', () => {
       };
     });
     expect(result.tips).toBe(401);
+    expect(result.tipSubmission).toBe(401); // the tip line is closed: no new tips through the API either
     expect(result.profiles).toBe(401);
     expect(result.audit).toBe(401);
     expect(result.articles).toBe(200);
@@ -80,25 +82,32 @@ test.describe('public pages', () => {
 });
 
 test.describe('front page layout and wording', () => {
-  test('the tip line, standards and section leaders close the page instead of interrupting the news', async ({ page }) => {
+  test('our standards and the section leaders close the page instead of interrupting the news', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Latest stories' })).toBeVisible();
     // The sidebar next to the latest stories holds only the poll.
     const side = page.locator('.page-home .split .side');
-    await expect(side.locator('.tip-card, .standards, .meet')).toHaveCount(0);
+    await expect(side.locator('.standards, .meet')).toHaveCount(0);
     await expect(side.getByRole('heading', { name: 'Falcon Pulse Poll' })).toBeVisible();
 
     // Everything about the newsroom comes after the last news section, in this order.
     const y = async (sel: string) => (await page.locator(sel).first().boundingBox())!.y;
     const lastNews = await page.locator('.page-home > section[aria-labelledby^="sec-"]').last().boundingBox();
-    const tip = await y('.closing .tip-card');
     const standards = await y('.closing .standards');
     const leaders = await y('.closing .meet');
-    expect(tip).toBeGreaterThan(lastNews!.y + lastNews!.height - 1);
     expect(standards).toBeGreaterThan(lastNews!.y + lastNews!.height - 1);
-    expect(leaders).toBeGreaterThan(Math.max(tip, standards));
+    expect(leaders).toBeGreaterThan(standards);
     // …and the footer is the only thing below them.
     expect(await y('footer.footer')).toBeGreaterThan(leaders);
+  });
+
+  test('there is no tip line anywhere on the public site', async ({ page }) => {
+    for (const path of ['/', '/#/about', '/#/scores', '/#/staff']) {
+      await page.goto(path);
+      await expect(page.locator('footer.footer')).toBeVisible();
+      await expect(page.getByRole('button', { name: /tip/i })).toHaveCount(0);
+      expect(await page.locator('body').innerText()).not.toMatch(/\btips?\b|tip line/i);
+    }
   });
 
   test('"Falcon" is singular everywhere, like "The Falcon Times"', async ({ page }) => {

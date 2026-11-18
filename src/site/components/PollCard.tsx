@@ -20,7 +20,7 @@ export function PollCard() {
     return (
       <section class="panel poll">
         <header class="poll-head"><Icon name="chart" size={18} /><h2>Falcon Pulse Poll</h2></header>
-        <p class="muted poll-empty">No poll is running right now. Got an idea for one? Send it through the tip line!</p>
+        <p class="muted poll-empty">No poll is running right now. Check back soon!</p>
       </section>
     );
   }

@@ -23,8 +23,6 @@
 .ticker-ctl button, .topbar-btn { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; color: inherit; padding: 5px 7px; border-radius: 6px; font-size: inherit; font-weight: 500; }
 .ticker-ctl button:hover, .topbar-btn:hover { background: rgb(255 255 255 / 12%); color: #fff; }
 .topbar-right { display: flex; align-items: center; gap: 4px; flex: none; }
-.topbar-tip { background: rgb(242 176 30 / 20%); color: var(--gold); border: 1px solid rgb(242 176 30 / 45%); font-weight: 700; border-radius: 999px; padding-inline: 12px; }
-.topbar-tip:hover { background: var(--gold); color: var(--navy); }
 .weather { display: inline-flex; align-items: center; gap: 6px; opacity: 0.9; margin-right: 8px; }
 @media (max-width: 700px) { .ticker-label { display: none; } .ticker-ctl { display: none; } }
 
@@ -209,11 +207,6 @@ a.announce-in:hover { text-decoration: underline; }
 .poll-note { text-align: center; font-style: italic; }
 
 /* Tip card */
-.tip-card { background: var(--gold-soft); border-color: color-mix(in srgb, var(--gold) 55%, transparent); display: grid; gap: 12px; }
-.tip-card h2 { font-size: 1.25rem; }
-.tip-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--gold); color: var(--navy); display: grid; place-items: center; flex: none; }
-.tip-thanks { text-align: center; display: grid; gap: 10px; justify-items: center; padding: 16px 0; color: var(--ok); }
-.tip-thanks p { color: var(--ink-2); }
 .standards h2 { font-size: 1.05rem; display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--navy); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .standards h2 { color: var(--gold); } }
 :root[data-theme='dark'] .standards h2 { color: var(--gold); }
@@ -276,7 +269,5 @@ a.announce-in:hover { text-decoration: underline; }
 
 
 
-/* The closing band: tip line + standards side by side, then the section leaders, after all the news. */
+/* The closing band: our standards, then the section leaders, after all the news. */
 .closing { display: grid; gap: 24px; }
-.closing-grid { display: grid; gap: 24px; grid-template-columns: 1fr; align-items: stretch; }
-@media (min-width: 800px) { .closing-grid { grid-template-columns: 1fr 1fr; } }

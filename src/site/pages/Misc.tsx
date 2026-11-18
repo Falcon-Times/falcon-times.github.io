@@ -5,7 +5,6 @@ import { Icon } from '@/ui/Icon';
 import { useNews } from '../data';
 import { ArticleCard } from '../components/ArticleParts';
 import { Scoreboard } from '../components/Scoreboard';
-import { openTipLine } from '../components/Tip';
 
 export function SearchPage({ query }: { query: string }) {
   const { articles, staffById, sectionById } = useNews();
@@ -58,10 +57,7 @@ export function AboutPage() {
         <h2>Our standards</h2>
         <ul>{s.standards.points.map((p) => <li key={p}>{p}</li>)}</ul>
         <h2>Get in touch</h2>
-        <p>
-          The fastest way to reach our editors is the <a href="#tip" onClick={(e) => { e.preventDefault(); openTipLine(); }}>tip line</a>, which can be anonymous.
-          {s.contact.email && <> You can also email <a href={`mailto:${s.contact.email}`}>{s.contact.email}</a>.</>}
-        </p>
+        {s.contact.email && <p>The fastest way to reach our editors is by email: <a href={`mailto:${s.contact.email}`}>{s.contact.email}</a>.</p>}
         <p>{s.site.school} · {s.site.address}</p>
       </div>
     </div>

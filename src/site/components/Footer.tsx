@@ -2,7 +2,6 @@ import { href } from '@/lib/router';
 import { Icon } from '@/ui/Icon';
 import { Logo } from '@/ui/Logo';
 import { useNews } from '../data';
-import { openTipLine } from './Tip';
 
 export function Footer() {
   const { site, sections } = useNews();
@@ -32,8 +31,7 @@ export function Footer() {
           </div>
           <div class="stack" style={{ '--stack': '10px' }}>
             <h3>Get involved</h3>
-            <p class="small">Want to write, shoot, design or share a confidential tip?</p>
-            {s.hotline.enabled && <button class="btn btn-gold" onClick={openTipLine}><Icon name="megaphone" size={15} /> Open the Tip Line</button>}
+            <p class="small">Want to write, shoot or design for the newspaper? Come join the club.</p>
             {social.length > 0 && (
               <ul class="row socials">
                 {social.map(([name, url]) => <li key={name}><a href={url} rel="noopener noreferrer" target="_blank">{name === 'x' ? 'X' : name[0].toUpperCase() + name.slice(1)}</a></li>)}

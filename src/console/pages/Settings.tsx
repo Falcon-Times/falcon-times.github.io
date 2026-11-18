@@ -4,7 +4,7 @@ import type { SiteSettings } from '@/lib/types';
 import { Loading } from '@/ui/States';
 import { toast, toastError } from '@/ui/Toast';
 import { saveSetting } from '../api';
-import { Checkbox, NumberField, TextArea, TextField } from '../fields';
+import { NumberField, TextArea, TextField } from '../fields';
 
 function Card({ title, intro, onSave, children }: { title: string; intro?: string; onSave: () => Promise<void>; children: preact.ComponentChildren }) {
   const [busy, setBusy] = useState(false);
@@ -46,11 +46,6 @@ export function Settings() {
         <TextField label="TikTok URL" value={s.social.tiktok} onChange={(v) => patch('social', { tiktok: v })} />
         <TextField label="YouTube URL" value={s.social.youtube} onChange={(v) => patch('social', { youtube: v })} />
         <TextField label="X / Twitter URL" value={s.social.x} onChange={(v) => patch('social', { x: v })} />
-      </Card>
-
-      <Card title="Tip line" onSave={() => saveSetting('hotline', s.hotline)}>
-        <div class="full"><Checkbox label="Accept tips from the public" checked={s.hotline.enabled} onChange={(v) => patch('hotline', { enabled: v })} hint="Turn off to hide every “Submit a tip” button." /></div>
-        <TextArea class="full" label="Intro text above the form" value={s.hotline.intro} onChange={(v) => patch('hotline', { intro: v })} max={400} rows={3} />
       </Card>
 
       <Card title="Editorial standards" intro="One promise per line — shown on the front page and About page." onSave={() => saveSetting('standards', s.standards)}>

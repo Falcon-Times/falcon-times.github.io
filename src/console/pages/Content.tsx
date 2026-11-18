@@ -8,6 +8,7 @@ import { useMe } from '../auth';
 import { CrudPage, type CrudConfig } from '../crud';
 import { newOption } from '../fields';
 import { useRefs } from '../refs';
+import { StaffRemoveModal } from '../StaffRemove';
 
 const yesNo = (v: boolean) => <span class={`badge ${v ? 'badge-ok' : ''}`}>{v ? 'Yes' : 'No'}</span>;
 const clip = (s: string, n = 90) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -154,9 +155,11 @@ export function Sections() {
 }
 
 export function StaffRoster() {
-  const { sectionName } = useRefs();
+  const { sectionName, reload: reloadRefs } = useRefs();
+  const me = useMe();
+  const [removing, setRemoving] = useState<{ person: StaffMember; reload: () => void } | null>(null);
   const config: CrudConfig<StaffMember> = {
-    title: 'Staff roster', singular: 'staff member', table: 'staff_members', orderBy: 'sort_order', canEdit: true,
+    title: 'Staff roster', singular: 'staff member', table: 'staff_members', orderBy: 'sort_order', canEdit: true, canDelete: false,
     intro: 'Everyone listed on “Meet the newsroom”, and who can be credited in a byline. This is separate from login accounts — people can appear here without an account.',
     defaults: () => ({ name: '', slug: '', title: 'Staff Writer', sections: [], lead_of: [], bio: '', photo_url: null, active: true, sort_order: 1000 }),
     columns: () => [
@@ -182,8 +185,14 @@ export function StaffRoster() {
       delete v.created_at;
       return v;
     },
-    extraActions: () => null,
+    // Deleting gets its own dialog (what changes first), instead of the generic confirm.
+    extraActions: (row, reload) => <button class="btn btn-sm btn-danger" aria-label={`Delete ${row.name}`} onClick={() => setRemoving({ person: row, reload })}><Icon name="trash" size={13} /> Delete</button>,
   };
-  return <CrudPage config={config} />;
+  return (
+    <>
+      <CrudPage config={config} />
+      {removing && <StaffRemoveModal person={removing.person} onClose={() => setRemoving(null)} onDone={() => { removing.reload(); reloadRefs(); void me.refresh(); setRemoving(null); }} />}
+    </>
+  );
 }
 

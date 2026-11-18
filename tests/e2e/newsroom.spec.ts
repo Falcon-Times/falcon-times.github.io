@@ -700,6 +700,54 @@ test('Esc closes only the photo cropper when it is open inside another dialog', 
   await expect(admin.getByRole('dialog')).toHaveCount(0);
 });
 
+test('admin deletes someone from the staff roster, after being told what it changes', async ({ browser }) => {
+  const NAME = `Casey Roster ${stamp}`;
+  const KEEP = `Kay Keeper ${stamp}`;
+  await admin.goto('/admin/#/staff');
+  await expect(admin.getByRole('heading', { name: 'Staff roster' })).toBeVisible();
+  for (const name of [NAME, KEEP]) {
+    await admin.getByRole('button', { name: /New staff member/ }).click();
+    await admin.getByLabel('Full name').fill(name);
+    await admin.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(admin.getByRole('row', { name: new RegExp(name) })).toBeVisible();
+  }
+
+  // Credit Casey on the published story, so the dialog has something to report.
+  const client = db();
+  await client.connect();
+  await client.query(`update public.articles set byline_ids = byline_ids || (select id from public.staff_members where name = $1) where title = $2`, [NAME, HEADLINE]);
+  const readers = await newPage(browser);
+  await readers.goto('/#/staff');
+  await expect(readers.getByText(NAME).first()).toBeVisible();
+
+  // Cancelling changes nothing.
+  const row = admin.getByRole('row', { name: new RegExp(NAME) });
+  await row.getByRole('button', { name: `Delete ${NAME}` }).click();
+  const dialog = admin.getByRole('dialog', { name: `Delete ${NAME}?` });
+  await expect(dialog).toContainText('credited on 1 story (1 published)');
+  await expect(dialog).toContainText('No login account is linked to them');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(row).toBeVisible();
+
+  // "Unlist instead" hides them without deleting.
+  await admin.getByRole('row', { name: new RegExp(KEEP) }).getByRole('button', { name: `Delete ${KEEP}` }).click();
+  await admin.getByRole('dialog', { name: `Delete ${KEEP}?` }).getByRole('button', { name: 'Unlist instead' }).click();
+  await expect(admin.getByText(`${KEEP} is no longer listed`)).toBeVisible();
+  await expect(admin.getByRole('row', { name: new RegExp(KEEP) }).locator('.badge', { hasText: 'No' })).toBeVisible();
+
+  // Deleting removes them everywhere; the story stays.
+  await row.getByRole('button', { name: `Delete ${NAME}` }).click();
+  await admin.getByRole('dialog', { name: `Delete ${NAME}?` }).getByRole('button', { name: 'Delete permanently' }).click();
+  await expect(admin.getByText(`${NAME} was deleted from the roster`)).toBeVisible();
+  await expect(row).toHaveCount(0);
+  const left = await client.query(`select (select count(*) from public.staff_members where name = $1)::int as people, (select count(*) from public.articles where title = $2 and cardinality(byline_ids) >= 0)::int as stories,
+    (select count(*) from public.articles a, public.staff_members s where a.title = $2 and s.id = any (a.byline_ids) and s.name = $1)::int as credited`, [NAME, HEADLINE]);
+  await client.end();
+  expect(left.rows[0]).toEqual({ people: 0, stories: 1, credited: 0 });
+  await readers.reload();
+  await expect(readers.getByText(NAME)).toHaveCount(0);
+});
+
 test('changing a password asks for the current one (Supabase requires it)', async ({ browser }) => {
   // An account with a temporary password, as an admin would hand over.
   const email = `temp-${stamp}@example.test`;

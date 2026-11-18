@@ -618,6 +618,58 @@ select tests.affects($$delete from storage.objects where name = 'p/gallery-and-s
 select tests.eq(tests.count('select 1 from public.gallery_images'), 0::bigint, 'both gallery entries are gone');
 select tests.logout();
 
+-- ------------------------------------------------------------ deleting staff roster entries
+select tests.logout();
+insert into public.staff_members (slug, name, photo_url) values
+  ('del-plain', 'Del Plain', null),
+  ('del-other', 'Del Other', null),
+  ('del-linked-writer', 'Del Linked Writer', null),
+  ('del-linked-admin', 'Del Linked Admin', null),
+  ('del-photo-free', 'Del Photo Free', 'https://x.test/storage/v1/object/public/media/roster/free.webp'),
+  ('del-photo-used', 'Del Photo Used', 'https://x.test/storage/v1/object/public/media/roster/used.webp');
+update public.profiles set staff_member_id = (select id from public.staff_members where slug = 'del-linked-writer') where id = '00000000-0000-0000-0000-000000000024';
+update public.profiles set staff_member_id = (select id from public.staff_members where slug = 'del-linked-admin') where id = '00000000-0000-0000-0000-000000000025';
+insert into public.articles (slug, title, section_id, status, published_at, created_by, byline_ids, cover_image_url) values
+  ('credited', 'Credited story', 'school-news', 'published', now() - interval '2 days', '00000000-0000-0000-0000-000000000004',
+   array[(select id from public.staff_members where slug = 'del-plain'), (select id from public.staff_members where slug = 'del-other')],
+   'https://x.test/storage/v1/object/public/media/roster/used.webp');
+create temp table roster_before as select last_edited_at from public.articles where slug = 'credited';
+grant select on roster_before to public;
+
+-- only admins can delete roster entries
+select tests.login('00000000-0000-0000-0000-000000000003');   -- section leader
+select tests.fails($$select public.delete_staff_member((select id from public.staff_members where slug = 'del-plain'))$$, 'a section leader cannot delete roster entries', 'permission');
+select tests.login('00000000-0000-0000-0000-000000000004');   -- writer
+select tests.fails($$select public.delete_staff_member((select id from public.staff_members where slug = 'del-plain'))$$, 'a writer cannot delete roster entries', 'permission');
+select tests.logout();
+select tests.eq(tests.count($$select 1 from public.staff_members where slug = 'del-plain'$$), 1::bigint, 'and nothing was deleted');
+
+-- a plain admin deletes an ordinary entry: the byline is cleaned up, the story is not "edited"
+select tests.login('00000000-0000-0000-0000-000000000025', 'aal2');
+select tests.eq(public.delete_staff_member((select id from public.staff_members where slug = 'del-plain')), null, 'an admin deletes a roster entry (no portrait file to clean up)');
+select tests.eq(tests.count($$select 1 from public.staff_members where slug = 'del-plain'$$), 0::bigint, 'the entry is gone');
+select tests.eq((select byline_ids = array[(select id from public.staff_members where slug = 'del-other')] from public.articles where slug = 'credited'), true, 'they are taken off the story''s byline, others stay');
+select tests.eq((select a.last_edited_at = b.last_edited_at from public.articles a, roster_before b where a.slug = 'credited'), true, 'removing a byline does not count as editing the story');
+select tests.eq((select title from public.articles where slug = 'credited'), 'Credited story', 'and the story itself is untouched');
+
+-- a linked login account survives, just unlinked
+select public.delete_staff_member((select id from public.staff_members where slug = 'del-linked-writer'));
+select tests.eq((select staff_member_id from public.profiles where id = '00000000-0000-0000-0000-000000000024'), null::uuid, 'a linked account is unlinked');
+select tests.eq((select active and role = 'writer' from public.profiles where id = '00000000-0000-0000-0000-000000000024'), true, 'but kept, with its role');
+
+-- portrait files: handed back for removal only when nothing else uses them
+select tests.eq(public.delete_staff_member((select id from public.staff_members where slug = 'del-photo-free')), 'roster/free.webp', 'an unused portrait file is reported for removal');
+select tests.eq(public.delete_staff_member((select id from public.staff_members where slug = 'del-photo-used')), null, 'a portrait file a story still uses is kept');
+
+-- an entry linked to an admin account needs a super admin
+select tests.fails($$select public.delete_staff_member((select id from public.staff_members where slug = 'del-linked-admin'))$$, 'a plain admin cannot delete an entry linked to an admin account', 'super admin');
+select tests.login('00000000-0000-0000-0000-000000000021', 'aal2');
+select public.delete_staff_member((select id from public.staff_members where slug = 'del-linked-admin'));
+select tests.eq(tests.count($$select 1 from public.staff_members where slug = 'del-linked-admin'$$), 0::bigint, 'a super admin can');
+select tests.eq((select staff_member_id from public.profiles where id = '00000000-0000-0000-0000-000000000025'), null::uuid, 'and the admin account is only unlinked');
+select tests.eq(tests.count($$select 1 from public.audit_log where table_name = 'staff_members' and op = 'DELETE'$$) >= 4, true, 'deletions are in the activity log');
+select tests.logout();
+
 -- ------------------------------------------------------------ server-side invariants
 select tests.logout();
 select tests.eq((select created_at > now() - interval '1 minute' from public.tips order by created_at desc limit 1), true, 'tip timestamps are server-controlled');

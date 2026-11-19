@@ -6,10 +6,12 @@ import { href, navigate } from '@/lib/router';
 import { safeStorage } from '@/lib/store';
 import type { Article, ArticleComment, GalleryImage } from '@/lib/types';
 import { Icon } from '@/ui/Icon';
+import { Modal } from '@/ui/Modal';
 import { ErrorNote, Loading } from '@/ui/States';
 import { toast, toastError } from '@/ui/Toast';
 import { addComment, deleteArticle, getArticle, listComments, saveArticle, saveArticleImages, type ArticleInput } from '../api';
 import { useMe } from '../auth';
+import { applyLinePrefix, applyWrap, isMac, keyLabels, matchShortcut, SHORTCUTS, shortcutHint, type Edit, type ShortcutId } from '../editorKeys';
 import { GalleryPicker } from '../GalleryPicker';
 import { Checkbox, ImageField, SelectField, TagsField, TextArea, TextField } from '../fields';
 import { useRefs } from '../refs';
@@ -300,30 +302,77 @@ function MarkdownEditor({ value, onChange, disabled, userId }: { value: string; 
   const file = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [help, setHelp] = useState(false);
 
+  /**
+   * Put `next` in the box by typing it in (execCommand), changing only the part that differs, so the
+   * browser's own Undo (Ctrl/⌘+Z) still works after a shortcut or toolbar button. Falls back to setting
+   * the value directly where that isn't supported (undo is lost then).
+   */
+  function replaceText(el: HTMLTextAreaElement, next: string, selStart: number, selEnd: number) {
+    const prev = el.value;
+    const max = Math.min(prev.length, next.length);
+    let p = 0;
+    while (p < max && prev[p] === next[p]) p += 1;
+    let s = 0;
+    while (s < max - p && prev[prev.length - 1 - s] === next[next.length - 1 - s]) s += 1;
+    el.focus();
+    el.setSelectionRange(p, prev.length - s);
+    const inserted = next.slice(p, next.length - s);
+    let ok = false;
+    try { ok = inserted === '' ? document.execCommand('delete') : document.execCommand('insertText', false, inserted); } catch { ok = false; }
+    if (!ok || el.value !== next) { el.value = next; el.dispatchEvent(new Event('input', { bubbles: true })); }
+    el.setSelectionRange(selStart, selEnd);
+  }
+  function run(fn: (value: string, a: number, b: number) => Edit) {
+    const el = ref.current;
+    if (!el || disabled) return;
+    const out = fn(el.value, el.selectionStart, el.selectionEnd);
+    replaceText(el, out.text, out.selStart, out.selEnd);
+  }
   function edit(fn: (sel: string, before: string, after: string) => { text: string; selStart?: number; selEnd?: number }) {
     const el = ref.current;
     if (!el) return;
-    const { selectionStart: a, selectionEnd: b } = el;
-    const out = fn(value.slice(a, b), value.slice(0, a), value.slice(b));
-    onChange(out.text);
-    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(out.selStart ?? a, out.selEnd ?? out.selStart ?? b); });
+    const { selectionStart: a, selectionEnd: b, value: v } = el;
+    const out = fn(v.slice(a, b), v.slice(0, a), v.slice(b));
+    replaceText(el, out.text, out.selStart ?? a, out.selEnd ?? out.selStart ?? b);
   }
-  const wrap = (l: string, r = l, ph = 'text') => () => edit((sel, before, after) => {
-    const inner = sel || ph;
-    return { text: before + l + inner + r + after, selStart: before.length + l.length, selEnd: before.length + l.length + inner.length };
-  });
-  const linePrefix = (prefix: string) => () => edit((sel, before, after) => {
-    const start = before.lastIndexOf('\n') + 1;
-    const head = before.slice(0, start), cur = before.slice(start) + sel;
-    const lines = (cur || 'text').split('\n').map((l, i) => (prefix === '1. ' ? `${i + 1}. ` : prefix) + l).join('\n');
-    return { text: head + lines + after, selStart: head.length, selEnd: head.length + lines.length };
-  });
+  const bold = () => run((v, a, b) => applyWrap(v, a, b, '**'));
+  const italic = () => run((v, a, b) => applyWrap(v, a, b, '*'));
+  const underline = () => run((v, a, b) => applyWrap(v, a, b, '<u>', '</u>'));   // Markdown has no underline; readers see HTML's <u>
+  const strike = () => run((v, a, b) => applyWrap(v, a, b, '~~'));
+  const heading = () => run((v, a, b) => applyLinePrefix(v, a, b, '## '));
+  const quote = () => run((v, a, b) => applyLinePrefix(v, a, b, '> '));
+  const bullets = () => run((v, a, b) => applyLinePrefix(v, a, b, '- '));
+  const numbers = () => run((v, a, b) => applyLinePrefix(v, a, b, '1. '));
   const link = () => {
     const url = prompt('Link address (https://…)');
     if (!url) return;
-    wrap('[', `](${url})`, 'link text')();
+    run((v, a, b) => {
+      const text = v.slice(a, b) || 'link text';
+      return { text: `${v.slice(0, a)}[${text}](${url})${v.slice(b)}`, selStart: a + 1, selEnd: a + 1 + text.length };
+    });
   };
+  const actions: Record<Exclude<ShortcutId, 'help'>, () => void> = { bold, italic, underline, strike, link, heading, quote, bullets, numbers };
+
+  function onKeyDown(e: KeyboardEvent) {
+    if (e.isComposing || disabled) return;
+    const id = matchShortcut(e);
+    if (!id || id === 'help') return;   // "help" is handled for the whole page, below
+    e.preventDefault();
+    actions[id]();
+  }
+  // Ctrl/⌘ + ? (or /) lists the shortcuts, from anywhere on the editor page.
+  useEffect(() => {
+    const onDoc = (e: KeyboardEvent) => {
+      if (e.isComposing || matchShortcut(e) !== 'help') return;
+      e.preventDefault();
+      setHelp((open) => !open);
+    };
+    document.addEventListener('keydown', onDoc);
+    return () => document.removeEventListener('keydown', onDoc);
+  }, []);
+
   const video = () => {
     const url = prompt('YouTube link');
     if (!url) return;
@@ -347,26 +396,57 @@ function MarkdownEditor({ value, onChange, disabled, userId }: { value: string; 
   return (
     <div>
       <div class="md-toolbar" role="toolbar" aria-label="Formatting">
-        <button type="button" class="btn btn-sm btn-ghost" title="Bold" onClick={wrap('**')} disabled={disabled}><Icon name="bold" size={15} /></button>
-        <button type="button" class="btn btn-sm btn-ghost" title="Italic" onClick={wrap('*')} disabled={disabled}><Icon name="italic" size={15} /></button>
-        <button type="button" class="btn btn-sm btn-ghost" title="Heading" onClick={linePrefix('## ')} disabled={disabled}><Icon name="heading" size={15} /></button>
-        <button type="button" class="btn btn-sm btn-ghost" title="Quote" onClick={linePrefix('> ')} disabled={disabled}><Icon name="quote" size={15} /></button>
-        <button type="button" class="btn btn-sm btn-ghost" title="Bulleted list" onClick={linePrefix('- ')} disabled={disabled}><Icon name="list" size={15} /></button>
-        <button type="button" class="btn btn-sm btn-ghost" title="Numbered list" onClick={linePrefix('1. ')} disabled={disabled}><Icon name="list-ordered" size={15} /></button>
-        <button type="button" class="btn btn-sm btn-ghost" title="Link" onClick={link} disabled={disabled}><Icon name="link" size={15} /></button>
+        <button type="button" class="btn btn-sm btn-ghost" title={shortcutHint('bold')} aria-label="Bold" onClick={bold} disabled={disabled}><Icon name="bold" size={15} /></button>
+        <button type="button" class="btn btn-sm btn-ghost" title={shortcutHint('italic')} aria-label="Italic" onClick={italic} disabled={disabled}><Icon name="italic" size={15} /></button>
+        <button type="button" class="btn btn-sm btn-ghost" title={shortcutHint('underline')} aria-label="Underline" onClick={underline} disabled={disabled}><Icon name="underline" size={15} /></button>
+        <button type="button" class="btn btn-sm btn-ghost" title={shortcutHint('strike')} aria-label="Strikethrough" onClick={strike} disabled={disabled}><Icon name="strike" size={15} /></button>
+        <button type="button" class="btn btn-sm btn-ghost" title={shortcutHint('heading')} aria-label="Subheading" onClick={heading} disabled={disabled}><Icon name="heading" size={15} /></button>
+        <button type="button" class="btn btn-sm btn-ghost" title={shortcutHint('quote')} aria-label="Quote" onClick={quote} disabled={disabled}><Icon name="quote" size={15} /></button>
+        <button type="button" class="btn btn-sm btn-ghost" title={shortcutHint('bullets')} aria-label="Bulleted list" onClick={bullets} disabled={disabled}><Icon name="list" size={15} /></button>
+        <button type="button" class="btn btn-sm btn-ghost" title={shortcutHint('numbers')} aria-label="Numbered list" onClick={numbers} disabled={disabled}><Icon name="list-ordered" size={15} /></button>
+        <button type="button" class="btn btn-sm btn-ghost" title={shortcutHint('link')} aria-label="Link" onClick={link} disabled={disabled}><Icon name="link" size={15} /></button>
         <button type="button" class="btn btn-sm btn-ghost" title="Insert photo" onClick={() => file.current?.click()} disabled={disabled || uploading}><Icon name={uploading ? 'loader' : 'image-plus'} class={uploading ? 'spinner' : ''} size={15} /></button>
         <button type="button" class="btn btn-sm btn-ghost" title="Insert photo from the gallery" onClick={() => setPicking(true)} disabled={disabled}><Icon name="camera" size={15} /></button>
         <button type="button" class="btn btn-sm btn-ghost" title="Embed YouTube video" onClick={video} disabled={disabled}><Icon name="video" size={15} /></button>
+        <span class="md-toolbar-end"><button type="button" class="btn btn-sm btn-ghost" title={shortcutHint('help')} aria-label="Keyboard shortcuts" onClick={() => setHelp(true)}><Icon name="keyboard" size={15} /></button></span>
         <input ref={file} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={onFile} />
       </div>
+      {help && <ShortcutsHelp onClose={() => setHelp(false)} />}
       {picking && <GalleryPicker onClose={() => setPicking(false)} onPick={(g) => {
         setPicking(false);
         edit((_s, before, after) => ({ text: `${before}${before && !before.endsWith('\n') ? '\n\n' : ''}![${g.alt_text || g.title}](${g.url})\n\n${after}` }));
       }} />}
-      <textarea ref={ref} class="md-input" value={value} disabled={disabled} spellcheck rows={22} onPaste={onPaste}
+      <textarea ref={ref} class="md-input" value={value} disabled={disabled} spellcheck rows={22} onPaste={onPaste} onKeyDown={onKeyDown}
         placeholder={'Start writing…\n\nTip: use ## for subheadings, **bold**, and paste a YouTube link on its own line to embed a video.'}
         onInput={(e) => onChange((e.target as HTMLTextAreaElement).value)} aria-label="Story text" />
     </div>
+  );
+}
+
+/** The keyboard-shortcut cheat sheet (Ctrl/⌘ + ?). */
+function ShortcutsHelp({ onClose }: { onClose: () => void }) {
+  const mac = isMac();
+  return (
+    <Modal title="Keyboard shortcuts" onClose={onClose} width={520}
+      footer={<button class="btn btn-primary" onClick={onClose}>Close</button>}>
+      <div class="stack" style={{ '--stack': '14px' }}>
+        <p class="small muted">Select some text first, or just place the cursor, then press the keys. Pressing a shortcut again takes the formatting off. {mac ? '⌘ is the Command key.' : 'On a Mac, use ⌘ instead of Ctrl.'}</p>
+        <table class="table shortcuts">
+          <tbody>
+            {SHORTCUTS.map((s) => (
+              <tr key={s.id}>
+                <th scope="row">{s.label}</th>
+                <td>
+                  {keyLabels(s, mac).map((k, i) => <>{i > 0 && ' + '}<kbd>{k}</kbd></>)}
+                  {s.note && <span class="small muted"> ({s.note})</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p class="small muted">Undo and redo work as usual ({mac ? '⌘Z / ⇧⌘Z' : 'Ctrl+Z / Ctrl+Y'}), including after a shortcut. Underline is the only formatting that isn’t plain Markdown; it’s saved as <code>&lt;u&gt;…&lt;/u&gt;</code>.</p>
+      </div>
+    </Modal>
   );
 }
 

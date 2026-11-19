@@ -100,6 +100,9 @@ a.stat:hover { transform: translateY(-2px); text-decoration: none; }
 .md-box { border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
 .md-tabs { display: flex; align-items: center; gap: 4px; padding: 8px; border-bottom: 1px solid var(--rule); background: var(--surface-2); }
 .md-toolbar { display: flex; flex-wrap: wrap; gap: 2px; padding: 6px 8px; border-bottom: 1px solid var(--rule); }
+.md-toolbar-end { margin-left: auto; }
+.shortcuts th { text-align: left; font-weight: 600; width: 45%; }
+kbd { display: inline-block; min-width: 1.6em; padding: 1px 6px; text-align: center; font: 600 0.8rem var(--font-ui, inherit); color: var(--ink); background: var(--surface-2); border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 6px; }
 .md-input { width: 100%; border: 0; padding: 16px; font-family: var(--font-text); font-size: 1.05rem; line-height: 1.7; background: var(--surface); color: var(--ink); resize: vertical; min-height: 420px; outline: none; display: block; }
 .preview { padding: clamp(16px, 3vw, 32px); display: grid; gap: 14px; }
 .preview-title { font-size: clamp(1.8rem, 4vw, 2.8rem); color: var(--navy); }

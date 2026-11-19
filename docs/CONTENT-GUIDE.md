@@ -24,6 +24,20 @@ did what.
    | a YouTube link on its own line | an embedded video |
 
    Use the toolbar buttons if you don't want to remember these. **Preview** shows how it'll look.
+
+   **Keyboard shortcuts** (Ctrl on Windows/Chromebook, ⌘ on a Mac; select some text first, or just place the
+   cursor, and press the same keys again to take the formatting off):
+
+   | Keys | Does |
+   | --- | --- |
+   | Ctrl/⌘ + **B** / **I** / **U** | bold / italic / underline |
+   | Ctrl/⌘ + Shift + **X** | ~~strikethrough~~ |
+   | Ctrl/⌘ + **K** | add a link |
+   | Ctrl/⌘ + Alt/⌥ + **2** | subheading |
+   | Ctrl/⌘ + Shift + **9** / **8** / **7** | quote / bulleted list / numbered list |
+   | Ctrl/⌘ + **?** (or **/**) | show this list, any time while editing |
+
+   Undo (Ctrl/⌘ + Z) works after a shortcut. Underline is saved as `<u>…</u>` since plain Markdown has none.
 4. Add a **cover photo** (upload), a **description** of it for readers who can't see it, a
    **caption**, and the **photographer's credit**. Use original, high-resolution photos — never blurry
    screenshots or stock art. Big photos are shrunk automatically. Small previews show how the photo is

@@ -747,6 +747,89 @@ test('admin deletes someone from the staff roster, after being told what it chan
   await expect(readers.getByText(NAME)).toHaveCount(0);
 });
 
+test('the story editor has keyboard shortcuts (and a list of them)', async () => {
+  await admin.goto('/admin/#/articles/new');
+  const box = admin.getByRole('textbox', { name: 'Story text' });
+  await expect(box).toBeVisible();
+  const text = () => box.inputValue();
+  const select = (a: number, b: number) => box.evaluate((el: HTMLTextAreaElement, [x, y]) => { el.focus(); el.setSelectionRange(x, y); }, [a, b]);
+  const reset = async (v: string) => { await box.fill(v); };
+
+  // inline formatting works on a selection, and again takes it off
+  await reset('make this count');
+  await select(5, 9);
+  await admin.keyboard.press('Control+b');
+  expect(await text()).toBe('make **this** count');
+  await admin.keyboard.press('Control+b');
+  expect(await text()).toBe('make this count');
+  await admin.keyboard.press('Control+i');
+  expect(await text()).toBe('make *this* count');
+  await admin.keyboard.press('Control+i');
+  await admin.keyboard.press('Control+u');
+  expect(await text()).toBe('make <u>this</u> count');
+  await admin.keyboard.press('Control+u');
+  await admin.keyboard.press('Control+Shift+x');
+  expect(await text()).toBe('make ~~this~~ count');
+
+  // Undo still works after a shortcut
+  await admin.keyboard.press('Control+z');
+  expect(await text()).toBe('make this count');
+
+  // no selection: a placeholder goes in, already selected so typing replaces it
+  await reset('');
+  await admin.keyboard.press('Control+b');
+  expect(await text()).toBe('**text**');
+  await admin.keyboard.type('Big news');
+  expect(await text()).toBe('**Big news**');
+
+  // line formatting
+  await reset('first\nsecond');
+  await select(7, 7);
+  await admin.keyboard.press('Control+Alt+2');
+  expect(await text()).toBe('first\n## second');
+  await admin.keyboard.press('Control+Alt+2');
+  expect(await text()).toBe('first\nsecond');
+  await select(0, 12);
+  await admin.keyboard.press('Control+Shift+8');
+  expect(await text()).toBe('- first\n- second');
+  await admin.keyboard.press('Control+Shift+8');
+  await admin.keyboard.press('Control+Shift+7');
+  expect(await text()).toBe('1. first\n2. second');
+  await admin.keyboard.press('Control+Shift+7');
+  await admin.keyboard.press('Control+Shift+9');
+  expect(await text()).toBe('> first\n> second');
+
+  // the formatting keys do nothing special outside the story text
+  await admin.getByRole('textbox', { name: 'Headline', exact: true }).fill('Plain');
+  await admin.keyboard.press('Control+b');
+  expect(await admin.getByRole('textbox', { name: 'Headline', exact: true }).inputValue()).toBe('Plain');
+
+  // Ctrl + / (or ?) lists the shortcuts, from anywhere on the page; Esc closes it
+  const dialog = admin.getByRole('dialog', { name: 'Keyboard shortcuts' });
+  await admin.keyboard.press('Control+/');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Close' }).first()).toBeFocused();   // the dialog is ready for keys (Esc) once it has focus
+  await expect(dialog.getByRole('row', { name: /Bold/ })).toContainText('Ctrl');
+  for (const name of ['Bold', 'Italic', 'Underline', 'Strikethrough', 'Add a link', 'Subheading', 'Quote', 'Bulleted list', 'Numbered list', 'Show this list']) {
+    await expect(dialog.getByRole('row', { name: new RegExp(name) })).toBeVisible();
+  }
+  await admin.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await box.focus();
+  await admin.keyboard.press('Control+Shift+Slash');   // "?" on a US keyboard
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Close' }).first()).toBeFocused();
+  await admin.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+
+  // the toolbar says what the keys are, and has a button for the list too
+  await expect(admin.getByRole('button', { name: 'Bold' })).toHaveAttribute('title', 'Bold (Ctrl+B)');
+  await admin.getByRole('button', { name: 'Keyboard shortcuts' }).click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close' }).last().click();   // the footer button (the corner X has the same name)
+  await expect(dialog).toHaveCount(0);
+});
+
 test('changing a password asks for the current one (Supabase requires it)', async ({ browser }) => {
   // An account with a temporary password, as an admin would hand over.
   const email = `temp-${stamp}@example.test`;

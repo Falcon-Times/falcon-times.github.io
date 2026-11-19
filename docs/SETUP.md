@@ -161,7 +161,9 @@ In the admin panel → **People & access → Add account**.
 * **Site settings** — tagline, the club's public contact email (leave blank to hide), social links,
   editorial standards. *Put the club email here, not in the code.*
 * **Staff roster** — the public "Meet the newsroom" list and who can be credited in a byline. Add
-  bios and photos (or let people add their own). *Delete* removes someone for good: the dialog first says how
+  bios and photos (or let people add their own). Anyone whose **Title is exactly “Editor”** appears in the front
+  page's *Meet our editors* section (above *Meet our section leaders*, which lists whoever leads a team); the
+  section is hidden while nobody has that title. *Delete* removes someone for good: the dialog first says how
   many stories credit them (they're taken off those bylines; the stories stay) and whether a login account is
   linked (it is kept, just unlinked). *Unlist instead* hides them without deleting.
 * **Sections & menu** — rename sections, edit the dropdown sub-sections, reorder, or hide a team.

@@ -101,6 +101,47 @@ test.describe('front page layout and wording', () => {
     expect(await y('footer.footer')).toBeGreaterThan(leaders);
   });
 
+  test('people titled "Editor" get their own section above the section leaders', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Meet our section leaders' })).toBeVisible();
+    // Nobody is titled "Editor" yet, so there is no such section.
+    await expect(page.getByRole('heading', { name: 'Meet our editors' })).toHaveCount(0);
+
+    const tag = `e2e-editor-${Date.now().toString(36)}`;
+    const client = db();
+    await client.connect();
+    try {
+      await client.query(
+        `insert into public.staff_members (slug, name, title, sort_order, active) values
+           ($1 || '-1', 'Edie One', 'Editor', 9001, true), ($1 || '-2', 'Ed Two', ' editor ', 9002, true),
+           ($1 || '-3', 'Eda Three', 'Editor', 9003, true), ($1 || '-4', 'Edgar Four', 'Editor', 9004, true),
+           ($1 || '-5', 'Not Listed', 'Editor', 9005, false), ($1 || '-6', 'Photo Editor', 'Photo Editor', 9006, true)`, [tag]);
+      await page.reload();
+      const panel = page.locator('.closing .meet', { has: page.getByRole('heading', { name: 'Meet our editors' }) });
+      await expect(panel).toBeVisible();
+      // exactly the four listed people titled "Editor", in roster order; other titles don't qualify
+      await expect(panel.locator('.leader strong')).toHaveText(['Edie One', 'Ed Two', 'Eda Three', 'Edgar Four']);
+      await expect(panel.getByRole('link', { name: /Edie One/ })).toHaveAttribute('href', new RegExp(`${tag}-1$`));
+      // it sits between the standards and the section leaders
+      const y = async (sel: string) => (await page.locator(sel).first().boundingBox())!.y;
+      const editorsY = (await panel.boundingBox())!.y;
+      const leadersY = (await page.locator('.closing .meet', { has: page.getByRole('heading', { name: 'Meet our section leaders' }) }).boundingBox())!.y;
+      expect(editorsY).toBeGreaterThan(await y('.closing .standards'));
+      expect(leadersY).toBeGreaterThan(editorsY);
+    } finally {
+      await client.query('delete from public.staff_members where slug like $1', [`${tag}-%`]);
+      await client.end();
+    }
+  });
+
+  test('the staff and front pages do not use the newspaper jargon "masthead" as a heading label', async ({ page }) => {
+    for (const path of ['/', '/#/staff']) {
+      await page.goto(path);
+      await expect(page.locator('footer.footer')).toBeVisible();
+      await expect(page.locator('.eyebrow', { hasText: /masthead/i })).toHaveCount(0);
+    }
+  });
+
   test('there is no tip line anywhere on the public site', async ({ page }) => {
     for (const path of ['/', '/#/about', '/#/scores', '/#/staff']) {
       await page.goto(path);

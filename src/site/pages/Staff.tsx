@@ -33,7 +33,7 @@ export function StaffPage() {
   return (
     <div class="stack" style={{ '--stack': '32px' }}>
       <header class="page-head">
-        <span class="eyebrow">Masthead</span>
+        <span class="eyebrow">Our team</span>
         <h1>Meet the newsroom</h1>
         <p class="muted">The students behind every story, photo, post and pixel. Click a name to read their profile and latest work.</p>
       </header>

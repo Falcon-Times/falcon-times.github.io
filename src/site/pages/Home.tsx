@@ -1,6 +1,7 @@
 import { href } from '@/lib/router';
 import { Icon } from '@/ui/Icon';
 import { Avatar } from '@/ui/Avatar';
+import type { StaffMember } from '@/lib/types';
 import { Empty } from '@/ui/States';
 import { useNews } from '../data';
 import { ArticleCard, Byline, Cover, SectionTag, Stamp } from '../components/ArticleParts';
@@ -13,6 +14,9 @@ export function Home() {
   const leadSection = lead ? sectionById.get(lead.section_id) : undefined;
   const rest = articles.filter((a) => a.id !== lead?.id);
   const latest = rest.slice(0, 6);
+  // People whose roster title is exactly "Editor" get their own section; section leaders are those who lead a team.
+  const editors = staff.filter((p) => p.title.trim().toLowerCase() === 'editor');
+  const leaders = staff.filter((p) => p.lead_of.length > 0);
 
   return (
     <div class="stack page-home" style={{ '--stack': '40px' }}>
@@ -76,24 +80,33 @@ export function Home() {
           <h2><Icon name="shield-check" size={18} /> Our standards</h2>
           <ul class="ticks">{site.settings.standards.points.map((p) => <li key={p}><Icon name="check" size={15} />{p}</li>)}</ul>
         </section>
-        <section class="panel meet" aria-labelledby="meet-h">
-          <div class="panel-head">
-            <div><span class="eyebrow">Masthead</span><h2 id="meet-h">Meet our section leaders</h2></div>
-            <a class="btn" href={href('/staff')}>Full staff <Icon name="arrow-right" size={16} /></a>
-          </div>
-          <ul class="leaders">
-            {staff.filter((p) => p.lead_of.length > 0).map((p) => (
-              <li key={p.id}>
-                <a href={href(`/staff/${p.slug}`)} class="leader">
-                  <Avatar name={p.name} src={p.photo_url} size={56} />
-                  <strong>{p.name}</strong>
-                  <span class="small muted">{p.lead_of.map((id) => sectionById.get(id)?.name).filter(Boolean).join(' · ')}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <PeoplePanel id="editors-h" eyebrow="Leadership" title="Meet our editors" people={editors} detail={(p) => p.sections.map((id) => sectionById.get(id)?.name).filter(Boolean).join(' · ') || p.title} />
+        <PeoplePanel id="meet-h" eyebrow="Our team" title="Meet our section leaders" people={leaders} detail={(p) => p.lead_of.map((id) => sectionById.get(id)?.name).filter(Boolean).join(' · ')} />
       </div>
     </div>
+  );
+}
+
+/** A row of people with portraits for the closing band ("Meet our editors", "Meet our section leaders"). Hidden when nobody qualifies. */
+function PeoplePanel({ id, eyebrow, title, people, detail }: { id: string; eyebrow: string; title: string; people: StaffMember[]; detail: (p: StaffMember) => string }) {
+  if (people.length === 0) return null;
+  return (
+    <section class="panel meet" aria-labelledby={id}>
+      <div class="panel-head">
+        <div><span class="eyebrow">{eyebrow}</span><h2 id={id}>{title}</h2></div>
+        <a class="btn" href={href('/staff')}>Full staff <Icon name="arrow-right" size={16} /></a>
+      </div>
+      <ul class="leaders">
+        {people.map((p) => (
+          <li key={p.id}>
+            <a href={href(`/staff/${p.slug}`)} class="leader">
+              <Avatar name={p.name} src={p.photo_url} size={56} />
+              <strong>{p.name}</strong>
+              <span class="small muted">{detail(p)}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

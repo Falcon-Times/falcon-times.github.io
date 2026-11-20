@@ -1,0 +1,109 @@
+# Newsroom guide — writers, photographers & section leaders
+
+Welcome to the Falcon Times newsroom! Sign in at **<https://thefalcontimes.org/newsroom/>** with the
+email and temporary password your admin gave you. **The temporary password works for 15 minutes**, so sign in
+and choose your own soon after you get it (if it runs out, ask your admin for a new one). The first time, you'll choose your own password
+(at least 12 characters with a capital letter, a lowercase letter and a number — a few random words plus a digit works great). **Never share your login**; the site records who
+did what.
+
+> Section leaders: we recommend turning on two-factor under **Account security**.
+> Forgot your phone? An admin can give you a one-time **bypass code** to get in without it.
+
+## Writing a story (everyone)
+
+1. **Stories → New story.**
+2. Write a **headline** and a one-or-two-sentence **summary line** (the "deck").
+3. Write the story in the big box. Plain text is fine; formatting is optional:
+
+   | You type | You get |
+   | --- | --- |
+   | `## A subheading` | a section heading |
+   | `**bold**` / `*italic*` | **bold** / *italic* |
+   | `> quote` | a pull quote |
+   | `- item` | a bullet list |
+   | `[words](https://link)` | a link |
+   | a YouTube link on its own line | an embedded video |
+
+   Use the toolbar buttons if you don't want to remember these. **Preview** shows how it'll look.
+
+   **Keyboard shortcuts** (Ctrl on Windows/Chromebook, ⌘ on a Mac; select some text first, or just place the
+   cursor, and press the same keys again to take the formatting off):
+
+   | Keys | Does |
+   | --- | --- |
+   | Ctrl/⌘ + **B** / **I** / **U** | bold / italic / underline |
+   | Ctrl/⌘ + Shift + **X** | ~~strikethrough~~ |
+   | Ctrl/⌘ + **K** | add a link |
+   | Ctrl/⌘ + Alt/⌥ + **2** | subheading |
+   | Ctrl/⌘ + Shift + **9** / **8** / **7** | quote / bulleted list / numbered list |
+   | Ctrl/⌘ + **?** (or **/**) | show this list, any time while editing |
+
+   Undo (Ctrl/⌘ + Z) works after a shortcut. Underline is saved as `<u>…</u>` since plain Markdown has none.
+4. Add a **cover photo** (upload), a **description** of it for readers who can't see it, a
+   **caption**, and the **photographer's credit**. Use original, high-resolution photos — never blurry
+   screenshots or stock art. Big photos are shrunk automatically. Small previews show how the photo is
+   trimmed on a story card and as the lead story — the site shows the middle, so keep the subject centred.
+5. Tick everyone who contributed under **Bylines**. Pick the **section** and **sub-section**, and add a few **tags**.
+6. Watch the **Checklist**, then click **Submit for review**. Your section leader gets it.
+
+Your work is saved on this device as you type and restored if the tab closes, but click **Save** often.
+Use **Editor notes** at the bottom to chat privately with your editor about the story.
+
+## Reviewing & publishing (section leaders)
+
+* **Stories** opens on the review queue. Open a story, read it, leave notes, and edit directly if needed.
+* **Publish now** makes it live and stamps the date/time. Pick a **Publish date & time** first to schedule it.
+* Once live, changes need an **Update notice** (e.g. *"Corrected the final score."*). Readers see
+  *Updated <time> — <your note>* at the top. That's our promise: transparent updates and corrections.
+* **Pin to trending carousel** and **Make this the lead story** control the front page.
+* **Archive** hides a story without deleting it.
+
+## Photographers
+
+Photographers can open **every** story — in any section and any status, drafts included — but can change only its
+**photos**: the cover photo, its description (alt text), caption and credit. The headline, text, section, tags and
+bylines are read-only, and you can't start, publish or delete stories. Use **Needs a cover photo** on the Stories page to
+find stories waiting for pictures, add the photo, and press **Save photos**. You can update photos on published stories
+too; the live site shows the new ones straight away (no “Updated” notice is added). Write a good description
+for every photo, and credit yourself.
+
+## The photo gallery
+
+**Photo gallery** (in the menu) is a shared library of photos from the photography team.
+
+- **Photographers** (and admins, and the Photography + Video section leader) press **Upload photos**, choose any number
+  of files, and fill in the credit, tags, and a title and description (alt text) for each. No story is needed first.
+  Click a photo to change its details later; photographers can edit and remove only their own.
+- **Everyone else** can browse and search the gallery. When you add a **cover photo** to a story, choose
+  **Choose from gallery**; the photo's description, caption and credit fill in for you (you can still change them). In the
+  text editor, the **camera button** inserts a gallery photo into the story body.
+- A story keeps its own copy, so removing a photo from the gallery never breaks a story that already uses it.
+- **Removing a photo also deletes its image file** — unless a story (cover or text), a portrait or another gallery
+  entry still uses it, in which case the file is kept and you're told so. That way unused uploads don't pile up in storage.
+
+## Section-leader tools
+
+| Tool | Use it for |
+| --- | --- |
+| **Scoreboard** | (Sports) add games, then enter final scores. Feeds the front page. |
+| **Polls** | Create a poll (2–8 answers). Active polls appear on the front page; you can reset votes. |
+| **Announcement bar** | A gold banner above the masthead — meetings, deadlines, breaking news. |
+| **Daily Spark quotes** | The rotating quotes in the top bar. Double-check wording and attribution. |
+
+## Editorial standards
+
+* Every story carries its publication time; updates and corrections are announced, never silent.
+* No open comment sections. Reader responses come through **Letters to the Editor** (sent by email to the club address) and are signed.
+* Credit photographers. Describe images (alt text). Get permission before publishing something someone told you in confidence.
+* Opinion pieces go in **Opinion + Advice** and are labelled as opinion.
+* If you're unsure about a name, a fact, or a photo of a minor, ask your section leader before submitting.
+
+## My profile
+
+**My profile** lets you change your display name, add a photo and write the short bio readers see on your
+writer page.
+
+**Your photo** is shown in a circle. After you pick a file, a window lets you **drag** the photo and **zoom**
+so the circle frames your face, with previews at the three sizes it appears (your profile page, the staff
+list and under stories). Nothing is saved until you press **Use this photo**, then **Save profile**. Pick **Adjust**
+to re-frame the photo you just chose. The same tool is used for photos on the admin **Staff roster**.

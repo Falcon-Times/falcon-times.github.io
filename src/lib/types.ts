@@ -1,0 +1,174 @@
+// Row shapes mirror supabase/migrations/*.sql.
+
+export type Role = 'writer' | 'editor' | 'photographer' | 'admin' | 'super_admin';
+
+/** Admins and super admins: full site access (and two-factor is required). */
+export const isAdminRole = (r: Role) => r === 'admin' || r === 'super_admin';
+export type ArticleStatus = 'draft' | 'submitted' | 'published' | 'archived';
+export type GameStatus = 'scheduled' | 'final' | 'postponed' | 'cancelled';
+
+export interface Profile {
+  id: string;
+  email: string;
+  display_name: string;
+  role: Role;
+  sections: string[];
+  staff_member_id: string | null;
+  active: boolean;
+  created_at: string;
+  /** Set only for accounts made with a temporary password that expires; empty once they choose their own. */
+  temp_password_expires_at: string | null;
+  /** When the expired password was made useless (the account stays blocked until an admin resets it). */
+  temp_password_revoked_at: string | null;
+}
+
+export interface Section {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  subsections: string[];
+  sort_order: number;
+  active: boolean;
+}
+
+export interface StaffMember {
+  id: string;
+  slug: string;
+  name: string;
+  title: string;
+  sections: string[];
+  lead_of: string[];
+  bio: string;
+  photo_url: string | null;
+  active: boolean;
+  sort_order: number;
+}
+
+export interface ArticleSummary {
+  id: string;
+  slug: string;
+  title: string;
+  deck: string;
+  section_id: string;
+  subsection: string | null;
+  cover_image_url: string | null;
+  image_alt: string;
+  image_caption: string;
+  photo_credit: string;
+  byline_ids: string[];
+  tags: string[];
+  status: ArticleStatus;
+  featured: boolean;
+  is_lead: boolean;
+  created_by: string | null;
+  published_at: string | null;
+  updated_at: string | null;
+  update_note: string;
+  last_edited_at: string;
+  created_at: string;
+}
+
+export interface Article extends ArticleSummary {
+  body_md: string;
+}
+
+export interface ArticleComment {
+  id: string;
+  article_id: string;
+  author_id: string | null;
+  body: string;
+  created_at: string;
+}
+
+export interface GalleryImage {
+  id: string;
+  url: string;
+  title: string;
+  alt_text: string;     // description for readers who can't see the photo
+  caption: string;
+  credit: string;
+  tags: string[];
+  uploaded_by: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface PollOption {
+  id: string;
+  label: string;
+}
+
+export interface Poll {
+  id: string;
+  category: string;
+  question: string;
+  options: PollOption[];
+  active: boolean;
+  created_at: string;
+}
+
+export type PollWithVotes = Poll & { votes: Record<string, number> };
+
+export interface Game {
+  id: string;
+  sport: string;
+  opponent: string;
+  is_home: boolean;
+  starts_at: string;
+  location: string;
+  status: GameStatus;
+  our_score: number | null;
+  their_score: number | null;
+  recap_article_id: string | null;
+}
+
+export interface Quote {
+  id: string;
+  text: string;
+  attribution: string;
+  active: boolean;
+  sort_order: number;
+}
+
+export interface Announcement {
+  id: string;
+  text: string;
+  link_url: string | null;
+  starts_at: string;
+  ends_at: string | null;
+  active: boolean;
+}
+
+export interface AuditEntry {
+  id: number;
+  at: string;
+  actor: string | null;
+  actor_email: string | null;
+  table_name: string;
+  op: string;
+  row_id: string | null;
+  summary: string;
+}
+
+export interface SiteSettings {
+  site: {
+    name: string;
+    tagline: string;
+    school: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    place: string;
+  };
+  contact: { email: string };
+  social: { instagram: string; tiktok: string; youtube: string; x: string };
+  standards: { points: string[] };
+}
+
+export interface SiteData {
+  settings: SiteSettings;
+  sections: Section[];
+  quotes: Quote[];
+  announcements: Announcement[];
+}

@@ -1,0 +1,144 @@
+# Architecture & security
+
+## The moving parts
+
+| Piece | Where it runs | Why |
+| --- | --- | --- |
+| Public site, newsroom and admin pages | GitHub Pages (static files built by GitHub Actions) | free, fast, no server to maintain |
+| Data, accounts, photo storage | Supabase (Postgres + Auth + Storage) | GitHub Pages can't store anything |
+| `admin-users` function | Supabase Edge Function | the only place that may create/disable logins |
+| Live weather in the top bar | Open-Meteo (no key, no account) | optional, hidden if it fails |
+
+There is no server of our own. Browsers talk straight to Supabase using its public key; **the database
+decides what each request may do**.
+
+## Who can do what
+
+Roles live in `public.profiles`: writer < section leader < admin < **super admin** (plus **photographer**, a side role: sees every story, changes only photos). Only an admin (or the
+`admin-users` function) can change them, and only a super admin can touch admin-level accounts (below).
+
+| | Reader | Writer | Section leader | Photographer | Admin | Super admin |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: |
+| Read published stories, polls, scores | ✅ | ✅ | ✅ | ✅ (and every draft) | ✅ | ✅ |
+| Vote in a poll | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Draft & submit stories in their sections | | ✅ | ✅ | | ✅ (any) | ✅ |
+| Edit a story after it's published | | | ✅ own sections | ✅ photos only | ✅ | ✅ |
+| Publish, schedule, unpublish, feature, set the lead story | | | ✅ own sections | | ✅ | ✅ |
+| Scoreboard (sports leader), polls, announcements, quotes | | | ✅ | | ✅ | ✅ |
+| Edit own bio/photo | | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Staff roster, sections, settings, activity log; accounts of writers, section leaders & photographers | | | | | ✅ **(needs 2FA)** | ✅ |
+| Create, change, disable, delete or reset **admin and super admin** accounts (and their bypass codes) | | | | | | ✅ **(needs 2FA)** |
+
+*Photographers:* RLS lets them read every article and update it; the `guard_articles` trigger then puts every
+column except `cover_image_url`, `image_alt`, `image_caption` and `photo_credit` back to its old value, so even a
+hand-made request can't touch the writing, status or schedule. They can't insert or delete stories, read notes
+or hold sections (a table constraint), so they never count as writers.
+
+*Photo gallery:* `public.gallery_images` holds links and text for photos in the public `media` bucket. Every staff role
+can read it; photographers, admins and the `photo-video` section leader can add rows; the uploader (or an admin /
+photo-video leader) can change or delete one, and a trigger fixes `uploaded_by` to the caller and the link to what it was.
+Stories copy the link and text when a photo is picked, so deleting a gallery row never touches a story.
+Only the gallery managers (photographers, admins, the `photo-video` leader) can upload files to the `media` bucket
+(`media_upload` storage policy); every staff member may upload to their own `portraits/<their id>/` folder for their
+portrait. The screens also refuse photos under 1200×800 px (portraits under 300 px), but that check runs in the
+browser: the database can't read image sizes.
+Removing a photo calls `delete_gallery_photo()`, which deletes the row and returns the file's storage path when nothing else uses it
+(`private.media_in_use`: a story's cover or text, a staff portrait, another gallery row); the app then removes the file through the
+Storage API, and the `media_delete` policy only allows that while the file is unused (admins may delete any file). Storage deletes
+need a SELECT policy too, so staff can read `media` records (`media_select`).
+
+A "section" is assigned to each person by an admin (`profiles.sections`). A writer for *Sports* cannot
+touch *School News*, even by crafting requests by hand — the database refuses.
+
+## Defence in depth
+
+1. **Row-level security (RLS)** on every table (`supabase/migrations/…01_schema.sql`). Anonymous visitors
+   can only `select` public content and call two tiny RPCs (`cast_vote`, `record_view`).
+2. **Field-level guards** (database triggers). RLS chooses rows; triggers choose fields. A writer can't
+   flip `featured`/`is_lead`/`published_at`, nobody but an admin can change a role, `created_by` can't be forged, published URLs can't change, and the last active admin
+   can't be demoted, disabled or deleted.
+3. **Two-factor for admins.** `effective_role()` only treats someone as an admin if the session's JWT says
+   `aal2` (a TOTP code was verified). A stolen admin password is therefore *worthless on its own* — it
+   grants no more power than a stranger's. The same check protects the Edge Function.
+   *Super admins:* the guard trigger on `profiles` (and the same checks in the `admin-users` function) lets only super
+   admins create, promote, demote, disable, delete or reset admin-level accounts or issue bypass codes for them; plain
+   admins can't even rename another admin. A plain admin can't change their own role either, and the last active
+   admin-level account and the last active super admin can never be removed. Super admins need 2FA like admins.
+   *Bypass codes:* an admin can issue a one-time, 10-digit code (stored only as a bcrypt hash in
+   `private.mfa_bypass_codes`, never exposed by the API) that stands in for the TOTP step. Redeeming it
+   (`redeem_mfa_bypass`, password session required) records the login's `session_id` in
+   `private.mfa_bypass_sessions` for 8 hours, and `effective_role()` accepts that as an alternative to
+   `aal2`. Codes are single-use, bound to one account, die after 5 wrong guesses and replace any earlier
+   code; failures all look identical so guesses reveal nothing. Everything is audited (the digits never are).
+   The helper functions behind those policies (`is_staff`, `edits_section`, …) are `SECURITY DEFINER` and
+   live in a `private` schema the API does not expose, so they can't be called as `/rest/v1/rpc/…`. The few
+   things the browser needs (`cast_vote`, `record_view`, `trending_article_ids`, `is_admin`, `staff_directory`)
+   are thin `SECURITY INVOKER` wrappers in `public`. This keeps Supabase's Security Advisor clean.
+4. **Service-role key isolation.** Creating and deleting logins needs Supabase's all-powerful service-role key.
+   It exists only inside the Edge Function's environment (injected by Supabase), never in this repo, GitHub, or
+   a browser. The function first calls `is_admin()` with the *caller's* token.
+5. **No self-service sign-up.** Public sign-ups are disabled in Supabase; accounts come only from an admin.
+   Temporary passwords are random, shown once, and must be replaced at first login. The one made when an
+   account is created stops working after 15 minutes: `profiles.temp_password_expires_at` cuts off all access
+   at the deadline (`effective_role()`), and a `pg_cron` job (every minute) replaces the password with an unknown
+   random one and ends the person's sessions, until an admin chooses *Reset password*. Passwords must be ≥ 12
+   characters with lowercase, uppercase and a digit (set in Supabase; `supabase/functions/_shared/passwordPolicy.ts`
+   mirrors it so the screens and the account function can explain it up front).
+6. **Output safety.** Story bodies are Markdown rendered then sanitised with DOMPurify (no scripts, event
+   handlers, iframes, forms, `javascript:` links). The only embed is YouTube via `youtube-nocookie.com`.
+   All other UI is rendered by Preact, which escapes text by default.
+7. **Public client is always anonymous.** Even if a section leader is signed in on the same browser, the
+   public site uses a separate anonymous client, so it never shows unpublished drafts.
+8. **Audit trail.** Changes to stories, accounts, roster, sections, settings, polls, scores, quotes,
+   and announcements are logged with who/when/what-columns.
+9. **Abuse limits.** Poll votes are one-per-browser (remembered locally) — good for a school poll, not a
+   ballot box. Supabase rate-limits sign-in attempts.
+
+Tested by `supabase/tests/10_rls.test.sql` (≈100 assertions run in CI) and an end-to-end browser suite.
+
+## Supabase Security Advisor
+
+Run it from *Advisors → Security Advisor* after deploying. Expected result: no errors and no function warnings.
+One warning may remain: **Leaked Password Protection Disabled**. That is a Supabase dashboard setting
+(*Authentication → Sign In / Providers → Email*) and is only available on paid plans. It's low risk here
+because accounts are created by admins with random temporary passwords, members must choose 12+ characters,
+and admins also need a second factor. Enable it if you ever upgrade.
+
+## Secrets: what lives where
+
+| Value | Public? | Stored in |
+| --- | --- | --- |
+| Supabase URL, anon/publishable key | Public by design (in every page) | GitHub Secrets → injected at build time |
+| Supabase **service-role** key | **Secret** | Supabase Edge Function environment only |
+| Database password, access token, project ref | **Secret** | GitHub Secrets, used only by the deploy workflow |
+| Club contact email, social links | Public | Database (*Site settings*) — editable without a deploy |
+| Members' passwords | **Secret** | Supabase Auth (hashed); never visible to anyone |
+
+## Data model (short version)
+
+`sections` → `articles` (status: draft → submitted → published → archived) · `article_comments` (private editor
+notes) · `article_views` (anonymous daily counters for "trending") · `staff_members` (public roster/bios) ·
+`profiles` (login accounts; separate from the roster) · `polls` + `poll_tallies` · `games` · `quotes` ·
+`announcements` · `site_settings` · `audit_log`. Photos live in the public `media` storage bucket.
+
+"Trending" = stories an editor pinned, then most-read in the last 7 days, then newest.
+
+## Privacy notes for a student publication
+
+* The site stores **no analytics, cookies or trackers.** Fonts are self-hosted. Two optional third-party
+  requests exist: Open-Meteo (weather; sends the visitor's IP to them) and YouTube (only when a story embeds a video).
+* The staff roster publishes **names, titles, optional bios and photos of students**. Confirm each student
+  (and their family, per school policy) is comfortable with that before listing them or adding a photo, and
+  remove anyone who asks — *Staff roster → Delete* removes them for good (their portrait file too, unless a story
+  still uses it); *Edit → Listed on the site* just hides them.
+* Photos are public once uploaded. Credit photographers and avoid identifying minors beyond what the school permits.
+
+## Known limitations
+
+* Article links are `#/article/…` (hash routing) so GitHub Pages needs no server rules. They share fine, but
+  social-media link previews show the site's generic card rather than the story's headline.
+* Search covers the 150 newest stories, in the browser.
+* One poll vote per browser is not tamper-proof.
+* Free Supabase projects pause when idle. The daily keep-alive workflow (a database write plus read/auth/storage
+  calls) mitigates this but can't guarantee it; only a paid plan does. While paused, the public site shows its
+  built-in fallback content and everything that needs the backend is down.

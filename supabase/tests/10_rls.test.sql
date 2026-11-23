@@ -1,0 +1,727 @@
+-- Row-level-security regression tests. Run with scripts/test-db.sh.
+-- Everything happens inside one transaction that is rolled back at the end.
+\set ON_ERROR_STOP on
+begin;
+
+create schema tests;
+grant usage on schema tests to public;
+
+create function tests.login(uid uuid, aal text default 'aal1', sid uuid default null) returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', uid, 'role', 'authenticated', 'aal', aal, 'session_id', sid)::text, true);
+  execute 'set local role authenticated';
+end $$;
+create function tests.anon() returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
+  execute 'set local role anon';
+end $$;
+create function tests.logout() returns void language plpgsql as $$
+begin
+  execute 'reset role';
+  perform set_config('request.jwt.claims', '', true);
+end $$;
+create function tests.count(q text) returns bigint language plpgsql as $$
+declare n bigint;
+begin execute 'select count(*) from (' || q || ') t' into n; return n; end $$;
+create function tests.eq(actual anyelement, expected anyelement, msg text) returns void language plpgsql as $$
+begin
+  if actual is distinct from expected then
+    raise exception 'FAIL - %: expected %, got %', msg, expected, actual;
+  end if;
+  raise notice 'ok - %', msg;
+end $$;
+create function tests.fails(q text, msg text, pattern text default '.') returns void language plpgsql as $$
+begin
+  begin
+    execute q;
+  exception when others then
+    if sqlerrm !~* pattern then raise exception 'FAIL - %: wrong error: %', msg, sqlerrm; end if;
+    raise notice 'ok - % (%)', msg, sqlerrm;
+    return;
+  end;
+  raise exception 'FAIL - %: statement succeeded but should have been rejected', msg;
+end $$;
+-- A statement that RLS silently turns into "0 rows affected".
+create function tests.affects(q text, expected bigint, msg text) returns void language plpgsql as $$
+declare n bigint;
+begin
+  execute q;
+  get diagnostics n = row_count;
+  if n <> expected then raise exception 'FAIL - %: expected % rows affected, got %', msg, expected, n; end if;
+  raise notice 'ok - %', msg;
+end $$;
+
+-- ---------------------------------------------------------------- fixtures
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-000000000001', 'admin@example.test'),
+  ('00000000-0000-0000-0000-000000000002', 'sports.editor@example.test'),
+  ('00000000-0000-0000-0000-000000000003', 'news.editor@example.test'),
+  ('00000000-0000-0000-0000-000000000004', 'news.writer@example.test'),
+  ('00000000-0000-0000-0000-000000000005', 'sports.writer@example.test'),
+  ('00000000-0000-0000-0000-000000000006', 'noprofile@example.test'),
+  ('00000000-0000-0000-0000-000000000007', 'inactive@example.test');
+
+insert into public.profiles (id, email, display_name, role, sections, active) values
+  ('00000000-0000-0000-0000-000000000001', 'admin@example.test', 'Admin', 'admin', '{}', true),
+  ('00000000-0000-0000-0000-000000000002', 'sports.editor@example.test', 'Sports Ed', 'editor', '{sports}', true),
+  ('00000000-0000-0000-0000-000000000003', 'news.editor@example.test', 'News Ed', 'editor', '{school-news}', true),
+  ('00000000-0000-0000-0000-000000000004', 'news.writer@example.test', 'News Writer', 'writer', '{school-news}', true),
+  ('00000000-0000-0000-0000-000000000005', 'sports.writer@example.test', 'Sports Writer', 'writer', '{sports}', true),
+  ('00000000-0000-0000-0000-000000000007', 'inactive@example.test', 'Inactive', 'writer', '{school-news}', false);
+
+insert into public.articles (id, slug, title, section_id, status, published_at, created_by) values
+  ('a0000000-0000-0000-0000-000000000001', 'pub-news', 'Published news', 'school-news', 'published', now() - interval '1 day', '00000000-0000-0000-0000-000000000004'),
+  ('a0000000-0000-0000-0000-000000000002', 'draft-news', 'Draft news', 'school-news', 'draft', null, '00000000-0000-0000-0000-000000000004'),
+  ('a0000000-0000-0000-0000-000000000003', 'draft-sports', 'Draft sports', 'sports', 'draft', null, '00000000-0000-0000-0000-000000000005'),
+  ('a0000000-0000-0000-0000-000000000004', 'future-news', 'Scheduled', 'school-news', 'published', now() + interval '2 days', '00000000-0000-0000-0000-000000000004');
+
+-- ------------------------------------------------------------ anonymous
+select tests.anon();
+select tests.eq(tests.count('select 1 from public.articles'), 2::bigint, 'anon sees seeded welcome + published news only (no drafts / scheduled)');
+select tests.eq(tests.count($$select 1 from public.articles where slug in ('draft-news','future-news','draft-sports')$$), 0::bigint, 'anon cannot see drafts or scheduled articles');
+select tests.eq(tests.count('select 1 from public.sections') > 5, true, 'anon reads sections');
+select tests.eq(tests.count('select 1 from public.staff_members') > 10, true, 'anon reads staff');
+select tests.fails('select * from public.profiles', 'anon cannot read profiles', 'permission denied');
+select tests.fails('select * from public.audit_log', 'anon cannot read audit log', 'permission denied');
+select tests.fails('select * from public.article_comments', 'anon cannot read comments', 'permission denied');
+select tests.fails($$update public.articles set title = 'x'$$, 'anon cannot update articles', 'permission denied');
+select tests.fails($$insert into public.articles (slug, title, section_id) values ('x','x','sports')$$, 'anon cannot insert articles', 'permission denied');
+
+select tests.eq(tests.count($$select 1 from public.site_settings where key = 'hotline'$$), 0::bigint, 'the old tip line setting is gone');
+-- The tip line is gone: no form on the site, no inbox in the newsroom, and no table behind it.
+select tests.eq(to_regclass('public.tips') is null, true, 'the tips table no longer exists');
+
+-- anon RPCs
+select tests.anon();
+select public.cast_vote((select id from public.polls limit 1), 'sports');
+select public.cast_vote((select id from public.polls limit 1), 'sports');
+select tests.eq((select votes from public.poll_tallies where option_id = 'sports'), 2, 'votes are tallied');
+select tests.fails($$select public.cast_vote((select id from public.polls limit 1), 'not-an-option')$$, 'unknown poll option rejected', 'Unknown poll');
+select tests.fails($$update public.poll_tallies set votes = 999$$, 'anon cannot edit tallies directly', 'permission denied');
+select public.record_view('a0000000-0000-0000-0000-000000000001');
+select public.record_view('a0000000-0000-0000-0000-000000000001');
+select public.record_view('a0000000-0000-0000-0000-000000000002');  -- draft: ignored
+select tests.eq((select count(*) from public.trending_article_ids(4)), 1::bigint, 'only published articles trend');
+select tests.eq((select views from public.trending_article_ids(4) limit 1), 2::bigint, 'trending counts views');
+select tests.fails('select public.bootstrap_admin(''admin@example.test'')', 'anon cannot call bootstrap_admin', 'permission denied');
+
+-- the API-visible surface: private helpers aren't in public, and anon can't read the colleague list
+select tests.eq((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                 where n.nspname = 'public' and p.prosecdef
+                   and p.proname in ('effective_role','is_staff','is_editor','my_sections','can_write_section','edits_section','my_staff_member_id','cast_vote','record_view','trending_article_ids','staff_directory','is_admin','is_super_admin')), 0::bigint,
+  'no SECURITY DEFINER helper is exposed in the public schema');
+select tests.fails('select * from public.staff_directory()', 'anon cannot list colleagues', 'permission denied');
+select tests.fails('select private.staff_directory()', 'anon cannot call the private directory function', 'permission denied');
+select tests.fails('select public.is_admin()', 'anon cannot call the is_admin wrapper', 'permission denied');
+select tests.fails('select public.is_super_admin()', 'anon cannot call the is_super_admin wrapper', 'permission denied');
+select tests.fails('select public.bootstrap_super_admin(''admin@example.test'')', 'anon cannot call bootstrap_super_admin', 'permission denied');
+
+-- ------------------------------------------------------------ no profile / inactive
+select tests.login('00000000-0000-0000-0000-000000000006');
+select tests.eq(private.is_staff(), false, 'user without profile has no staff rights');
+select tests.fails($$insert into public.articles (slug, title, section_id, created_by) values ('np','np','sports','00000000-0000-0000-0000-000000000006')$$, 'user without profile cannot write', 'row-level security');
+select tests.eq(tests.count('select 1 from public.audit_log'), 0::bigint, 'user without profile reads no activity log');
+select tests.login('00000000-0000-0000-0000-000000000007');
+select tests.eq(private.is_staff(), false, 'inactive account has no rights');
+
+-- ------------------------------------------------------------ writer (school news)
+select tests.login('00000000-0000-0000-0000-000000000004');
+select tests.eq(tests.count('select 1 from public.articles where status <> ''published'''), 1::bigint, 'writer sees own drafts only');
+insert into public.articles (slug, title, section_id, status, featured, is_lead, published_at, body_md)
+  values ('w-new', 'Writer piece', 'school-news', 'submitted', true, true, now(), 'hello');
+select tests.eq((select featured from public.articles where slug = 'w-new'), false, 'writer cannot self-feature');
+select tests.eq((select is_lead from public.articles where slug = 'w-new'), false, 'writer cannot self-promote to lead');
+select tests.eq((select published_at from public.articles where slug = 'w-new'), null::timestamptz, 'writer cannot set published_at');
+select tests.eq((select created_by from public.articles where slug = 'w-new'), '00000000-0000-0000-0000-000000000004'::uuid, 'created_by forced to caller');
+select tests.fails($$insert into public.articles (slug, title, section_id) values ('w-sports','x','sports')$$, 'writer cannot write outside own section', 'row-level security');
+select tests.fails($$insert into public.articles (slug, title, section_id, status) values ('w-pub','x','school-news','published')$$, 'writer cannot insert published', 'row-level security');
+update public.articles set body_md = 'edited' where slug = 'w-new';
+select tests.eq((select body_md from public.articles where slug = 'w-new'), 'edited', 'writer edits own submission');
+select tests.fails($$update public.articles set status = 'published' where slug = 'w-new'$$, 'writer cannot publish', 'row-level security');
+select tests.affects($$update public.articles set title = 'hax' where slug = 'pub-news'$$, 0, 'writer cannot edit own already-published article');
+select tests.affects($$update public.articles set title = 'hax' where slug = 'draft-sports'$$, 0, 'writer cannot edit others'' drafts');
+select tests.affects($$delete from public.articles where slug = 'draft-sports'$$, 0, 'writer cannot delete others'' drafts');
+select tests.affects($$delete from public.articles where slug = 'pub-news'$$, 0, 'writer cannot delete published article');
+select tests.eq(tests.count('select 1 from public.audit_log'), 0::bigint, 'writer reads no activity log');
+select tests.eq(tests.count('select 1 from public.profiles'), 1::bigint, 'writer sees only own profile');
+update public.profiles set role = 'admin', sections = '{sports,school-news}', active = true where id = auth.uid();
+select tests.eq((select role from public.profiles where id = auth.uid()), 'writer', 'writer cannot escalate own role');
+select tests.eq((select sections from public.profiles where id = auth.uid()), '{school-news}'::text[], 'writer cannot change own sections');
+update public.profiles set display_name = 'Renamed Writer' where id = auth.uid();
+select tests.eq((select display_name from public.profiles where id = auth.uid()), 'Renamed Writer', 'writer can rename self');
+select tests.fails($$insert into public.profiles (id, email, role) values (gen_random_uuid(), 'x@example.test', 'admin')$$, 'cannot insert profiles via API', 'permission denied');
+select tests.fails($$insert into public.sections (id, name) values ('hack', 'hack')$$, 'writer cannot create sections', 'row-level security');
+select tests.affects($$update public.site_settings set value = '{}'::jsonb$$, 0, 'writer cannot edit settings');
+select tests.affects($$update public.games set status = 'cancelled'$$, 0, 'writer cannot edit games');
+select tests.fails($$insert into public.polls (question, options) values ('q?', '[{"id":"a","label":"a"},{"id":"b","label":"b"}]')$$, 'writer cannot create polls', 'row-level security');
+insert into public.article_comments (article_id, author_id, body) values ('a0000000-0000-0000-0000-000000000002', auth.uid(), 'Question for the editor');
+select tests.fails($$insert into public.article_comments (article_id, author_id, body) values ('a0000000-0000-0000-0000-000000000003', auth.uid(), 'Comment on someone else''s draft')$$, 'writer cannot comment on unrelated drafts', 'row-level security');
+-- writer's staff bio
+select tests.eq(tests.count('select 1 from public.staff_directory()'), 6::bigint, 'staff directory lists colleagues (no emails)');
+
+-- ------------------------------------------------------------ other writer (sports)
+select tests.login('00000000-0000-0000-0000-000000000005');
+select tests.eq(tests.count($$select 1 from public.articles where slug = 'draft-news'$$), 0::bigint, 'writers cannot read each other''s drafts');
+select tests.eq(tests.count('select 1 from public.article_comments'), 0::bigint, 'comment threads are private to author + editors');
+
+-- ------------------------------------------------------------ news editor
+select tests.login('00000000-0000-0000-0000-000000000003');
+select tests.eq(tests.count($$select 1 from public.articles where slug = 'draft-news'$$), 1::bigint, 'editor reads drafts in own section');
+select tests.eq(tests.count($$select 1 from public.articles where slug = 'draft-sports'$$), 0::bigint, 'editor cannot read drafts of other sections');
+select tests.eq(tests.count('select 1 from public.article_comments'), 1::bigint, 'editor reads feedback thread in own section');
+update public.articles set status = 'published', is_lead = true where slug = 'w-new';
+select tests.eq((select published_at is not null from public.articles where slug = 'w-new'), true, 'publishing stamps published_at');
+select tests.eq((select is_lead from public.articles where slug = 'w-new'), true, 'editor can set lead story');
+select tests.eq(tests.count('select 1 from public.articles where is_lead'), 1::bigint, 'only one lead story at a time');
+update public.articles set title = 'Retitled', update_note = 'Corrected a name.' where slug = 'w-new';
+select tests.eq((select updated_at is not null from public.articles where slug = 'w-new'), true, 'update note stamps updated_at');
+update public.articles set slug = 'changed-slug' where slug = 'w-new';
+select tests.eq(tests.count($$select 1 from public.articles where slug = 'w-new'$$), 1::bigint, 'published slugs are immutable');
+select tests.affects($$update public.articles set title = 'nope' where slug = 'draft-sports'$$, 0, 'editor cannot edit other sections');
+select tests.fails($$update public.articles set section_id = 'sports' where slug = 'draft-news'$$, 'editor cannot move article into foreign section', 'row-level security');
+select tests.affects($$delete from public.articles where slug = 'w-new'$$, 0, 'editor cannot delete published articles');
+select tests.affects($$update public.games set status = 'cancelled'$$, 0, 'news editor cannot edit games');
+insert into public.polls (question, options) values ('Pick one?', '[{"id":"a","label":"A"},{"id":"b","label":"B"}]');
+select tests.eq(tests.count($$select 1 from public.polls where question = 'Pick one?'$$), 1::bigint, 'editors create polls');
+select tests.fails($$insert into public.sections (id, name) values ('hack', 'hack')$$, 'editor cannot create sections', 'row-level security');
+select tests.eq(tests.count('select 1 from public.audit_log'), 0::bigint, 'editor cannot read audit log');
+
+-- ------------------------------------------------------------ sports editor
+select tests.login('00000000-0000-0000-0000-000000000002');
+insert into public.games (sport, opponent, starts_at, status, our_score, their_score)
+  values ('Football', 'Somewhere HS', now() - interval '1 day', 'final', 21, 14);
+select tests.eq(tests.count('select 1 from public.games'), 1::bigint, 'sports editor manages scoreboard');
+
+-- ------------------------------------------------------------ admin, password only (no 2FA yet)
+select tests.login('00000000-0000-0000-0000-000000000001', 'aal1');
+select tests.eq(public.is_admin(), false, 'admin without 2FA has no admin rights');
+select tests.eq(private.is_staff(), false, 'admin without 2FA has no staff rights either');
+select tests.eq(tests.count('select 1 from public.profiles'), 1::bigint, 'admin without 2FA only sees own profile');
+select tests.eq(tests.count('select 1 from public.audit_log'), 0::bigint, 'admin without 2FA cannot read the activity log');
+select tests.affects($$update public.sections set name = 'Hacked' where id = 'sports'$$, 0, 'admin without 2FA cannot edit sections');
+
+-- ------------------------------------------------------------ admin with 2FA
+select tests.login('00000000-0000-0000-0000-000000000001', 'aal2');
+select tests.eq(public.is_admin(), true, 'admin with 2FA is admin');
+select tests.eq(tests.count('select 1 from public.profiles'), 6::bigint, 'admin reads all profiles');
+update public.profiles set role = 'editor', sections = '{sports}' where id = '00000000-0000-0000-0000-000000000005';
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000005'), 'editor', 'admin changes roles');
+-- an admin can't change their own role (only super admins manage admin accounts); the last admin can't be disabled
+update public.profiles set role = 'writer' where id = '00000000-0000-0000-0000-000000000001';
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000001'), 'admin', 'an admin cannot demote themselves');
+select tests.fails($$update public.profiles set active = false where id = '00000000-0000-0000-0000-000000000001'$$, 'last admin cannot be deactivated', 'At least one active admin');
+update public.sections set subsections = '{A,B}' where id = 'sports';
+select tests.eq((select subsections from public.sections where id = 'sports'), '{A,B}'::text[], 'admin edits sections');
+update public.site_settings set value = jsonb_set(value, '{tagline}', '"New tagline"') where key = 'site';
+select tests.eq((select value ->> 'tagline' from public.site_settings where key = 'site'), 'New tagline', 'admin edits settings');
+insert into public.staff_members (slug, name) values ('new-person', 'New Person');
+select tests.eq(tests.count($$select 1 from public.staff_members where slug = 'new-person'$$), 1::bigint, 'admin adds staff');
+select tests.eq(tests.count('select 1 from public.audit_log') >= 5, true, 'admin reads audit log');
+
+-- ------------------------------------------------------------ staff bio self-service
+select tests.logout();
+update public.profiles set staff_member_id = (select id from public.staff_members where slug = 'allison-bailey') where id = '00000000-0000-0000-0000-000000000005';
+select tests.login('00000000-0000-0000-0000-000000000005');
+update public.staff_members set bio = 'My bio', name = 'Hacked Name', sections = '{sports,school-news}' where slug = 'allison-bailey';
+select tests.eq((select bio from public.staff_members where slug = 'allison-bailey'), 'My bio', 'staff edit own bio');
+select tests.eq((select name from public.staff_members where slug = 'allison-bailey'), 'Allison Bailey', 'staff cannot rename their masthead entry');
+select tests.affects($$update public.staff_members set bio = 'x' where slug = 'molly-krenicky'$$, 0, 'staff cannot edit others'' bios');
+
+-- ------------------------------------------------------------ storage
+select tests.login('00000000-0000-0000-0000-000000000004');
+-- a writer can upload their own portrait, but not photos (those go through the photographers' gallery)
+insert into storage.objects (bucket_id, name, owner) values ('media', 'portraits/00000000-0000-0000-0000-000000000004/2026/me.webp', auth.uid());
+select tests.fails($$insert into storage.objects (bucket_id, name, owner) values ('media', 'a.jpg', auth.uid())$$, 'a writer cannot upload photos', 'row-level security');
+select tests.fails($$insert into storage.objects (bucket_id, name, owner) values ('media', '00000000-0000-0000-0000-000000000004/2026/photo.webp', auth.uid())$$, 'not even into their own folder', 'row-level security');
+select tests.fails($$insert into storage.objects (bucket_id, name, owner) values ('media', 'portraits/00000000-0000-0000-0000-000000000005/2026/them.webp', auth.uid())$$, 'and a portrait goes in their own portraits folder only', 'row-level security');
+select tests.login('00000000-0000-0000-0000-000000000003');
+select tests.fails($$insert into storage.objects (bucket_id, name, owner) values ('media', 'leader.jpg', auth.uid())$$, 'a section leader elsewhere cannot upload photos either', 'row-level security');
+select tests.login('00000000-0000-0000-0000-000000000001', 'aal2');
+insert into storage.objects (bucket_id, name, owner) values ('media', 'admin-photo.jpg', auth.uid());   -- would raise if denied
+do $$ begin raise notice 'ok - an admin can upload photos'; end $$;
+select tests.anon();
+select tests.fails($$insert into storage.objects (bucket_id, name) values ('media', 'evil.jpg')$$, 'anon cannot upload', 'permission denied');
+select tests.login('00000000-0000-0000-0000-000000000006');
+select tests.fails($$insert into storage.objects (bucket_id, name, owner) values ('media', 'evil.jpg', auth.uid())$$, 'users without a profile cannot upload', 'row-level security');
+
+-- ------------------------------------------------------------ 2FA bypass codes
+select tests.logout();
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-000000000011', 'admin2@example.test'),
+  ('00000000-0000-0000-0000-000000000012', 'lost.phone@example.test');
+insert into public.profiles (id, email, display_name, role, active) values
+  ('00000000-0000-0000-0000-000000000011', 'admin2@example.test', 'Second Admin', 'super_admin', true),   -- issues codes for admin-level accounts
+  ('00000000-0000-0000-0000-000000000012', 'lost.phone@example.test', 'Lost Phone', 'admin', true);
+
+select tests.login('00000000-0000-0000-0000-000000000004', 'aal2');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000012')$$, 'writers cannot make bypass codes', 'Only admins');
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal1');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000012')$$, 'admins without 2FA cannot make bypass codes', 'Only admins');
+select tests.anon();
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000012')$$, 'anon cannot make bypass codes', 'permission denied');
+select tests.fails($$select public.redeem_mfa_bypass('1234567890')$$, 'anon cannot redeem bypass codes', 'permission denied');
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1');
+select tests.fails($$select * from private.mfa_bypass_codes$$, 'signed-in users cannot read the code table', 'permission denied');
+select tests.fails($$select * from private.mfa_bypass_sessions$$, 'signed-in users cannot read bypass sessions', 'permission denied');
+
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal2');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000011')$$, 'admins cannot make a bypass code for themselves', 'another admin');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000012', 1)$$, 'bypass codes last at least 5 minutes', 'between 5 minutes');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000012', 5000)$$, 'bypass codes last at most 24 hours', 'between 5 minutes');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000099')$$, 'bypass codes need a real account', 'No active account');
+select set_config('tests.code', public.create_mfa_bypass('00000000-0000-0000-0000-000000000012', 30), false);
+select tests.eq(current_setting('tests.code') ~ '^[0-9]{10}$', true, 'a bypass code is 10 digits');
+select tests.eq(tests.count('select 1 from public.mfa_bypass_overview()'), 1::bigint, 'admin sees the outstanding code');
+select tests.eq((select user_id from public.mfa_bypass_overview()), '00000000-0000-0000-0000-000000000012'::uuid, 'overview names who holds it');
+select tests.logout();
+select tests.eq(tests.count($$select 1 from private.mfa_bypass_codes where code_hash = current_setting('tests.code') or code_hash not like '$2%'$$), 0::bigint, 'only a bcrypt hash of the code is stored');
+select tests.eq(tests.count($$select 1 from public.audit_log where summary like 'created a 2FA bypass code for lost.phone@example.test%'$$), 1::bigint, 'creating a code is audited');
+select tests.eq(tests.count($$select 1 from public.audit_log where summary like '%' || current_setting('tests.code') || '%'$$), 0::bigint, 'the code itself is never logged');
+
+-- the person it was made for
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000001');
+select tests.eq(public.mfa_bypass_active(), false, 'no bypass before redeeming');
+select tests.eq(public.is_admin(), false, 'password-only admin is not admin');
+select tests.eq(tests.count('select 1 from public.mfa_bypass_overview()'), 0::bigint, 'non-admins see no overview');
+select tests.eq(public.redeem_mfa_bypass('0000000000'), false, 'a wrong code is refused');
+select tests.eq(public.redeem_mfa_bypass('12'), false, 'a malformed code is refused');
+select tests.eq(public.is_admin(), false, 'still not admin after a wrong guess');
+select tests.login('00000000-0000-0000-0000-000000000004', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000002');
+select tests.eq(public.redeem_mfa_bypass(current_setting('tests.code')), false, 'someone else cannot redeem the code');
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1');
+select tests.eq(public.redeem_mfa_bypass(current_setting('tests.code')), false, 'a session without an id cannot redeem');
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000001');
+select tests.eq(public.redeem_mfa_bypass(substr(current_setting('tests.code'), 1, 3) || ' - ' || substr(current_setting('tests.code'), 4, 3) || '-' || substr(current_setting('tests.code'), 7)), true, 'the right code works, however it is typed');
+select tests.eq(public.mfa_bypass_active(), true, 'the session is now bypassed');
+select tests.eq(public.is_admin(), true, 'a bypassed admin session has admin rights');
+select tests.eq(tests.count('select 1 from public.audit_log') >= 1, true, 'and can read admin-only data');
+select tests.eq(public.redeem_mfa_bypass(current_setting('tests.code')), false, 'a code works only once');
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000003');
+select tests.eq(public.is_admin(), false, 'a different login session is not bypassed');
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000001');
+select tests.eq(public.is_admin(), false, 'nor is another account on the same session id');
+select tests.logout();
+update private.mfa_bypass_sessions set expires_at = now() - interval '1 minute';
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000001');
+select tests.eq(public.is_admin(), false, 'a bypassed session expires');
+select tests.logout();
+select tests.eq(tests.count($$select 1 from public.audit_log where summary = 'signed in with a 2FA bypass code' and actor_email = 'lost.phone@example.test'$$), 1::bigint, 'using a code is audited');
+
+-- guess limit, replacement, revoking, expiry
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal2');
+select set_config('tests.code', public.create_mfa_bypass('00000000-0000-0000-0000-000000000012', 60), false);
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000004');
+select tests.eq(
+  (select (public.redeem_mfa_bypass(case when current_setting('tests.code') = '1111111111' then '2222222222' else '1111111111' end)) from generate_series(1, 5) group by 1),
+  false, 'five wrong guesses are all refused');
+select tests.eq(public.redeem_mfa_bypass(current_setting('tests.code')), false, 'after five wrong guesses even the right code is dead');
+select tests.eq(public.is_admin(), false, 'so the session is not bypassed');
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal2');
+select tests.eq((select failed_attempts from public.mfa_bypass_overview()), 5, 'admin can see that it was locked');
+select tests.eq(tests.count($$select 1 from public.audit_log where summary like '2FA bypass code locked%'$$), 1::bigint, 'locking is audited');
+select set_config('tests.old', public.create_mfa_bypass('00000000-0000-0000-0000-000000000012', 60), false);
+select set_config('tests.code', public.create_mfa_bypass('00000000-0000-0000-0000-000000000012', 60), false);
+select tests.eq(tests.count('select 1 from public.mfa_bypass_overview()'), 1::bigint, 'a new code replaces the old one');
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000005');
+select tests.eq(public.redeem_mfa_bypass(current_setting('tests.old')), false, 'the replaced code no longer works');
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal2');
+select public.revoke_mfa_bypass('00000000-0000-0000-0000-000000000012');
+select tests.eq(tests.count('select 1 from public.mfa_bypass_overview()'), 0::bigint, 'revoking clears the outstanding code');
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000005');
+select tests.eq(public.redeem_mfa_bypass(current_setting('tests.code')), false, 'a revoked code no longer works');
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal2');
+select set_config('tests.code', public.create_mfa_bypass('00000000-0000-0000-0000-000000000012', 5), false);
+select tests.logout();
+update private.mfa_bypass_codes set expires_at = now() - interval '1 second' where used_at is null;
+select tests.login('00000000-0000-0000-0000-000000000012', 'aal1', 'aaaaaaaa-0000-0000-0000-000000000005');
+select tests.eq(public.redeem_mfa_bypass(current_setting('tests.code')), false, 'an expired code no longer works');
+select tests.eq(public.is_admin(), false, 'and grants nothing');
+
+-- ------------------------------------------------------------ super admins
+select tests.logout();
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-000000000021', 'super1@example.test'),
+  ('00000000-0000-0000-0000-000000000022', 'super2@example.test'),
+  ('00000000-0000-0000-0000-000000000024', 'plain.writer@example.test'),
+  ('00000000-0000-0000-0000-000000000025', 'plain.admin@example.test');
+insert into public.profiles (id, email, display_name, role, sections, active) values
+  ('00000000-0000-0000-0000-000000000021', 'super1@example.test', 'Super One', 'super_admin', '{}', true),
+  ('00000000-0000-0000-0000-000000000024', 'plain.writer@example.test', 'Plain Writer', 'writer', '{sports}', true),
+  ('00000000-0000-0000-0000-000000000025', 'plain.admin@example.test', 'Plain Admin', 'admin', '{}', true);
+update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000011';   -- back to a plain admin: 21 is the only super admin from here
+select public.bootstrap_super_admin('super2@example.test', 'Super Two');
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000022'), 'super_admin', 'bootstrap_super_admin creates a super admin');
+update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000022';  -- keep one super admin for the lock-out tests
+
+-- 2FA applies to super admins too
+select tests.login('00000000-0000-0000-0000-000000000021', 'aal1');
+select tests.eq(public.is_admin(), false, 'a super admin without 2FA has no admin rights');
+select tests.eq(public.is_super_admin(), false, 'nor super admin rights');
+select tests.eq(tests.count('select 1 from public.profiles'), 1::bigint, 'and only sees their own profile');
+
+-- a super admin is an admin for everything admins can do
+select tests.login('00000000-0000-0000-0000-000000000021', 'aal2');
+select tests.eq(public.is_super_admin(), true, 'a super admin with 2FA is a super admin');
+select tests.eq(public.is_admin(), true, 'and is an admin');
+select tests.eq(private.is_editor(), true, 'and an editor');
+select tests.eq(tests.count('select 1 from public.audit_log') >= 1, true, 'reads the activity log like an admin');
+update public.sections set name = 'Sports (super)' where id = 'sports';
+select tests.eq((select name from public.sections where id = 'sports'), 'Sports (super)', 'edits sections like an admin');
+
+-- a plain admin runs the site but cannot manage admin-level accounts
+select tests.login('00000000-0000-0000-0000-000000000001', 'aal2');
+select tests.eq(public.is_super_admin(), false, 'a plain admin is not a super admin');
+select tests.eq(public.is_admin(), true, 'but is an admin');
+update public.profiles set sections = '{sports,school-news}' where id = '00000000-0000-0000-0000-000000000024';
+select tests.eq((select sections from public.profiles where id = '00000000-0000-0000-0000-000000000024'), '{sports,school-news}'::text[], 'a plain admin manages writers');
+select tests.fails($$update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000024'$$, 'a plain admin cannot make someone an admin', 'Only super admins');
+select tests.fails($$update public.profiles set role = 'super_admin' where id = '00000000-0000-0000-0000-000000000024'$$, 'nor a super admin', 'Only super admins');
+select tests.fails($$update public.profiles set role = 'writer' where id = '00000000-0000-0000-0000-000000000025'$$, 'a plain admin cannot demote another admin', 'Only super admins');
+select tests.fails($$update public.profiles set active = false where id = '00000000-0000-0000-0000-000000000021'$$, 'a plain admin cannot disable a super admin', 'Only super admins');
+select tests.fails($$update public.profiles set display_name = 'Hacked' where id = '00000000-0000-0000-0000-000000000025'$$, 'nor edit another admin in any way', 'Only super admins');
+update public.profiles set display_name = 'Admin Renamed', role = 'super_admin' where id = '00000000-0000-0000-0000-000000000001';
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000001'), 'admin', 'a plain admin cannot promote themselves');
+select tests.eq((select display_name from public.profiles where id = '00000000-0000-0000-0000-000000000001'), 'Admin Renamed', 'but can rename themselves');
+select set_config('tests.code', public.create_mfa_bypass('00000000-0000-0000-0000-000000000024', 15), false);
+select tests.eq(current_setting('tests.code') ~ '^[0-9]{10}$', true, 'a plain admin can issue bypass codes for writers');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000025', 15)$$, 'but not for admins', 'Only super admins');
+select tests.fails($$select public.create_mfa_bypass('00000000-0000-0000-0000-000000000021', 15)$$, 'nor for super admins', 'Only super admins');
+select tests.fails($$select public.revoke_mfa_bypass('00000000-0000-0000-0000-000000000025')$$, 'nor revoke those of admins', 'Only super admins');
+
+-- a super admin manages admins
+select tests.login('00000000-0000-0000-0000-000000000021', 'aal2');
+update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000024';
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000024'), 'admin', 'a super admin can promote to admin');
+update public.profiles set role = 'writer' where id = '00000000-0000-0000-0000-000000000024';
+update public.profiles set role = 'writer', sections = '{sports}' where id = '00000000-0000-0000-0000-000000000025';
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000025'), 'writer', 'and demote an admin');
+update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000025';
+select set_config('tests.code', public.create_mfa_bypass('00000000-0000-0000-0000-000000000025', 15), false);
+select tests.eq(current_setting('tests.code') ~ '^[0-9]{10}$', true, 'and issue a bypass code for an admin');
+select public.revoke_mfa_bypass('00000000-0000-0000-0000-000000000025');
+
+-- lock-out protection
+select tests.fails($$update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000021'$$, 'the last super admin cannot be demoted', 'super admin account must remain');
+select tests.fails($$update public.profiles set active = false where id = '00000000-0000-0000-0000-000000000021'$$, 'nor disabled', 'super admin account must remain');
+update public.profiles set role = 'super_admin' where id = '00000000-0000-0000-0000-000000000022';
+update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000021';
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000021'), 'admin', 'with a second super admin, the first can step down');
+select tests.logout();
+update public.profiles set role = 'super_admin' where id = '00000000-0000-0000-0000-000000000021';
+
+-- ------------------------------------------------------------ keep-alive heartbeat
+select tests.logout();
+update private.keepalive set last_ping = now() - interval '2 hours', pings = 5;
+select tests.anon();
+select tests.eq((public.keepalive() ->> 'pings')::bigint, 6::bigint, 'anon can send the heartbeat, which writes');
+select tests.eq((public.keepalive() ->> 'pings')::bigint, 6::bigint, 'but at most once an hour (spamming changes nothing)');
+select tests.fails($$select * from private.keepalive$$, 'anon cannot read the heartbeat table', 'permission denied');
+select tests.fails($$update private.keepalive set pings = 0$$, 'nor change it', 'permission denied');
+select tests.login('00000000-0000-0000-0000-000000000004');
+select tests.eq((public.keepalive() ->> 'pings')::bigint, 6::bigint, 'signed-in users can call it too');
+select tests.logout();
+select tests.eq((select count(*) from private.keepalive), 1::bigint, 'there is only ever one heartbeat row');
+
+-- ------------------------------------------------------------ photographers
+select tests.logout();
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-000000000031', 'photog@example.test');
+insert into public.profiles (id, email, display_name, role, sections, active) values
+  ('00000000-0000-0000-0000-000000000031', 'photog@example.test', 'Pat Photog', 'photographer', '{}', true);
+select tests.fails($$update public.profiles set sections = '{sports}' where id = '00000000-0000-0000-0000-000000000031'$$, 'a photographer cannot be given sections', 'profiles_photographer_no_sections');
+-- remember what the stories looked like
+create temp table photog_before as select id, title, deck, body_md, section_id, status, slug, featured, is_lead, published_at, tags, created_by from public.articles;
+grant select on photog_before to public;
+
+select tests.login('00000000-0000-0000-0000-000000000031');
+select tests.eq(tests.count('select 1 from public.articles'), (select count(*) from photog_before)::bigint, 'a photographer reads every story: any section, any status');
+select tests.eq(tests.count($$select 1 from public.articles where slug in ('draft-news','draft-sports','future-news','pub-news')$$), 4::bigint, 'including other people''s drafts and scheduled stories');
+select tests.eq(tests.count('select 1 from public.audit_log'), 0::bigint, 'but no activity log');
+select tests.eq(tests.count('select 1 from public.polls'), (select count(*) from public.polls where active)::bigint, 'and only the polls everyone sees');
+select tests.eq(tests.count('select 1 from public.article_comments'), 0::bigint, 'and no internal notes');
+select tests.eq(tests.count('select 1 from public.profiles'), 1::bigint, 'and only their own profile');
+select tests.eq(public.is_admin(), false, 'a photographer is not an admin');
+select tests.eq(private.is_editor(), false, 'nor an editor');
+select tests.eq(private.is_photographer(), true, 'they are a photographer');
+
+-- they can set the image fields -- on a draft in any section and on a live story
+update public.articles set cover_image_url = 'https://img.test/a.webp', image_alt = 'Alt text', image_caption = 'A caption', photo_credit = 'Pat Photog'
+  where slug = 'draft-sports';
+select tests.eq((select image_caption from public.articles where slug = 'draft-sports'), 'A caption', 'a photographer sets image fields on another section''s draft');
+update public.articles set cover_image_url = 'https://img.test/b.webp', image_alt = 'Live alt', photo_credit = 'Pat Photog' where slug = 'pub-news';
+select tests.eq((select cover_image_url from public.articles where slug = 'pub-news'), 'https://img.test/b.webp', 'and on a published story');
+
+-- ...and nothing else, however the request is built
+update public.articles set
+    title = 'Hacked', deck = 'x', body_md = 'rewritten', section_id = 'sports', status = 'archived', slug = 'hacked',
+    featured = true, is_lead = true, published_at = now() + interval '9 days', tags = '{evil}', created_by = '00000000-0000-0000-0000-000000000031',
+    update_note = 'changed', image_caption = 'Caption two'
+  where slug = 'pub-news';
+select tests.eq((select image_caption from public.articles where slug = 'pub-news'), 'Caption two', 'image fields change in a mixed update');
+select tests.eq((select count(*) from public.articles a join photog_before b using (id)
+                 where a.title is distinct from b.title or a.deck is distinct from b.deck or a.body_md is distinct from b.body_md
+                    or a.section_id is distinct from b.section_id or a.status is distinct from b.status or a.slug is distinct from b.slug
+                    or a.featured is distinct from b.featured or a.is_lead is distinct from b.is_lead
+                    or a.published_at is distinct from b.published_at or a.tags is distinct from b.tags or a.created_by is distinct from b.created_by), 0::bigint,
+  'but the headline, text, section, status, link, pins, schedule, tags and author are untouched');
+select tests.eq((select update_note from public.articles where slug = 'pub-news'), '', 'and no update notice can be stamped');
+select tests.fails($$insert into public.articles (slug, title, section_id, status) values ('photog-story', 'Mine', 'sports', 'draft')$$, 'a photographer cannot start a story', 'row-level security');
+select tests.affects($$delete from public.articles where slug = 'draft-sports'$$, 0, 'nor delete one');
+select tests.affects($$update public.profiles set role = 'admin' where id = auth.uid()$$, 1, 'a role change on their own profile is silently ignored');
+select tests.eq((select role from public.profiles where id = '00000000-0000-0000-0000-000000000031'), 'photographer', 'so a photographer cannot promote themselves');
+select tests.eq(public.is_admin(), false, 'still not an admin');
+insert into storage.objects (bucket_id, name, owner) values ('media', 'photog.jpg', auth.uid());   -- would raise if denied
+do $$ begin raise notice 'ok - they can upload photos'; end $$;
+
+-- other roles are unaffected: a writer still cannot edit someone else's story
+select tests.login('00000000-0000-0000-0000-000000000004');
+select tests.affects($$update public.articles set image_alt = 'writer edit' where slug = 'draft-sports'$$, 0, 'writers still cannot touch other people''s stories');
+select tests.logout();
+drop table photog_before;
+
+-- ------------------------------------------------------------ photo gallery
+select tests.logout();
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-000000000041', 'photo.editor@example.test'),
+  ('00000000-0000-0000-0000-000000000042', 'photog2@example.test');
+insert into public.profiles (id, email, display_name, role, sections, active) values
+  ('00000000-0000-0000-0000-000000000041', 'photo.editor@example.test', 'Photo Lead', 'editor', '{photo-video}', true),
+  ('00000000-0000-0000-0000-000000000042', 'photog2@example.test', 'Second Photog', 'photographer', '{}', true);
+
+select tests.anon();
+select tests.fails('select * from public.gallery_images', 'anon cannot read the gallery', 'permission denied');
+select tests.fails($$insert into public.gallery_images (url) values ('https://img.test/x.webp')$$, 'anon cannot add to it', 'permission denied');
+
+-- a photographer adds photos with no story involved
+select tests.login('00000000-0000-0000-0000-000000000031');
+insert into public.gallery_images (url, title, alt_text, caption, credit, tags, uploaded_by)
+  values ('https://img.test/g1.webp', 'Homecoming parade', 'Floats on the main road', 'The parade', 'Pat Photog', '{homecoming}', '00000000-0000-0000-0000-000000000004');
+select tests.eq((select uploaded_by from public.gallery_images where title = 'Homecoming parade'), '00000000-0000-0000-0000-000000000031'::uuid, 'the uploader is always the caller, even if the request says otherwise');
+select tests.fails($$insert into public.gallery_images (url) values ('javascript:alert(1)')$$, 'a gallery link must be http(s)', 'violates check constraint');
+update public.gallery_images set title = 'Parade 2026', caption = 'Seniors lead the way', tags = '{homecoming,parade}', url = 'https://evil.test/x.webp'
+  where title = 'Homecoming parade';
+select tests.eq((select url from public.gallery_images where title = 'Parade 2026'), 'https://img.test/g1.webp', 'a photographer edits their photo''s details but never its link');
+select tests.eq((select caption from public.gallery_images where title = 'Parade 2026'), 'Seniors lead the way', 'details do change');
+select tests.eq((select updated_at is not null from public.gallery_images where title = 'Parade 2026'), true, 'and updated_at is stamped');
+
+-- everyone on staff can read it; only the right people can add or change
+select tests.login('00000000-0000-0000-0000-000000000004');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 1::bigint, 'a writer can browse the gallery');
+select tests.fails($$insert into public.gallery_images (url) values ('https://img.test/w.webp')$$, 'but not add to it', 'row-level security');
+select tests.affects($$update public.gallery_images set title = 'mine now'$$, 0, 'nor edit it');
+select tests.affects($$delete from public.gallery_images$$, 0, 'nor delete from it');
+select tests.login('00000000-0000-0000-0000-000000000002');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 1::bigint, 'a section leader elsewhere can browse it');
+select tests.fails($$insert into public.gallery_images (url) values ('https://img.test/e.webp')$$, 'but cannot add to it', 'row-level security');
+select tests.login('00000000-0000-0000-0000-000000000006');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 0::bigint, 'a user without a profile sees nothing');
+
+-- another photographer can see it but not change a colleague's photo
+select tests.login('00000000-0000-0000-0000-000000000042');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 1::bigint, 'photographers see each other''s photos');
+select tests.affects($$update public.gallery_images set title = 'taken over'$$, 0, 'but cannot change them');
+select tests.affects($$delete from public.gallery_images$$, 0, 'or delete them');
+insert into public.gallery_images (url, title) values ('https://img.test/g2.webp', 'Second shoot');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 2::bigint, 'and add their own');
+
+-- the Photography + Video section leader and admins manage every photo
+select tests.login('00000000-0000-0000-0000-000000000041');
+update public.gallery_images set credit = 'Fixed credit' where title = 'Parade 2026';
+select tests.eq((select credit from public.gallery_images where title = 'Parade 2026'), 'Fixed credit', 'the photography section leader can edit anyone''s photo');
+insert into public.gallery_images (url, title) values ('https://img.test/g3.webp', 'Leader upload');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 3::bigint, 'and add photos');
+select tests.login('00000000-0000-0000-0000-000000000001', 'aal2');
+select tests.eq(tests.count($$select 1 from public.audit_log where table_name = 'gallery_images'$$) >= 3, true, 'gallery changes are in the audit trail');
+delete from public.gallery_images where title = 'Leader upload';
+select tests.eq(tests.count('select 1 from public.gallery_images'), 2::bigint, 'an admin can delete any photo');
+select tests.login('00000000-0000-0000-0000-000000000001', 'aal1');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 0::bigint, 'an admin without 2FA gets nothing');
+select tests.login('00000000-0000-0000-0000-000000000031');
+delete from public.gallery_images where title = 'Parade 2026';
+select tests.eq(tests.count('select 1 from public.gallery_images'), 1::bigint, 'a photographer can delete their own photo');
+select tests.logout();
+delete from public.gallery_images;
+
+-- ------------------------------------------------------------ gallery photo clean-up
+select tests.logout();
+insert into storage.objects (bucket_id, name, owner) values
+  ('media', 'w/used-cover.webp', '00000000-0000-0000-0000-000000000004'),
+  ('media', 'w/used-body.webp',  '00000000-0000-0000-0000-000000000004'),
+  ('media', 'w/unused.webp',     '00000000-0000-0000-0000-000000000004'),
+  ('media', 'w/unused-2.webp',   '00000000-0000-0000-0000-000000000004'),
+  ('media', 'p/in-gallery.webp', '00000000-0000-0000-0000-000000000031'),
+  ('media', 'p/gallery-and-story.webp', '00000000-0000-0000-0000-000000000031'),
+  ('media', 'p/orphan.webp',     '00000000-0000-0000-0000-000000000031');
+insert into public.articles (slug, title, section_id, status, created_by, cover_image_url, body_md) values
+  ('cleanup-cover', 'Cleanup cover', 'school-news', 'draft', '00000000-0000-0000-0000-000000000004',
+   'https://x.test/storage/v1/object/public/media/w/used-cover.webp', 'text'),
+  ('cleanup-body', 'Cleanup body', 'school-news', 'draft', '00000000-0000-0000-0000-000000000004',
+   null, 'See ![pic](https://x.test/storage/v1/object/public/media/w/used-body.webp) here'),
+  ('cleanup-gallery', 'Cleanup gallery', 'school-news', 'published', '00000000-0000-0000-0000-000000000004',
+   'https://x.test/storage/v1/object/public/media/p/gallery-and-story.webp', 'text');
+insert into public.gallery_images (url, title, uploaded_by) values
+  ('https://x.test/storage/v1/object/public/media/p/in-gallery.webp', 'In gallery', '00000000-0000-0000-0000-000000000031'),
+  ('https://x.test/storage/v1/object/public/media/p/gallery-and-story.webp', 'Also in a story', '00000000-0000-0000-0000-000000000031');
+
+-- what counts as "in use"
+select tests.login('00000000-0000-0000-0000-000000000004');
+select tests.eq(private.media_in_use('w/used-cover.webp'), true, 'a story''s cover photo is in use');
+select tests.eq(private.media_in_use('w/used-body.webp'), true, 'so is a photo inside a story''s text');
+select tests.eq(private.media_in_use('p/in-gallery.webp'), true, 'so is a photo that is in the gallery');
+select tests.eq(private.media_in_use('w/unused.webp'), false, 'a file nothing links to is not');
+select tests.eq(private.media_in_use('nope/missing.webp'), false, 'neither is a path that does not exist');
+select tests.eq(private.media_path('https://x.test/storage/v1/object/public/media/p/a/b.webp'), 'p/a/b.webp', 'the storage path comes from the public link');
+select tests.eq(private.media_path('https://elsewhere.test/pic.jpg'), null, 'links to other sites have no storage path');
+
+-- files can't be deleted while used, by anyone but an admin
+select tests.affects($$delete from storage.objects where name = 'w/used-cover.webp'$$, 0, 'an uploader cannot delete a file their story''s cover uses');
+select tests.affects($$delete from storage.objects where name = 'w/used-body.webp'$$, 0, 'nor one used in the story text');
+select tests.affects($$delete from storage.objects where name = 'p/orphan.webp'$$, 0, 'and not someone else''s file');
+select tests.affects($$delete from storage.objects where name = 'w/unused.webp'$$, 1, 'but can delete their own unused file');
+select tests.login('00000000-0000-0000-0000-000000000002');
+select tests.affects($$delete from storage.objects where name = 'w/unused-2.webp'$$, 0, 'a section leader elsewhere cannot delete others'' files');
+select tests.login('00000000-0000-0000-0000-000000000041');
+select tests.affects($$delete from storage.objects where name = 'w/used-cover.webp'$$, 0, 'the photography leader cannot delete a used file either');
+select tests.affects($$delete from storage.objects where name = 'w/unused-2.webp'$$, 1, 'but can delete an unused one');
+select tests.login('00000000-0000-0000-0000-000000000001', 'aal2');
+select tests.affects($$delete from storage.objects where name = 'w/used-body.webp'$$, 1, 'an admin can delete any file on purpose');
+select tests.login('00000000-0000-0000-0000-000000000001', 'aal1');
+select tests.affects($$delete from storage.objects where name = 'p/orphan.webp'$$, 0, 'but only with 2FA');
+
+-- removing a gallery photo
+select tests.login('00000000-0000-0000-0000-000000000004');
+select tests.fails($$select public.delete_gallery_photo((select id from public.gallery_images where title = 'In gallery'))$$, 'a writer cannot remove gallery photos', 'permission to remove');
+select tests.login('00000000-0000-0000-0000-000000000042');
+select tests.fails($$select public.delete_gallery_photo((select id from public.gallery_images where title = 'In gallery'))$$, 'nor can another photographer', 'permission to remove');
+select tests.login('00000000-0000-0000-0000-000000000031');
+select tests.eq(tests.count($$select 1 from storage.objects where name = 'p/in-gallery.webp'$$), 1::bigint, 'staff can see the media file records');
+select tests.anon();
+select tests.fails('select 1 from storage.objects', 'but the public cannot list them', 'permission denied');
+select tests.login('00000000-0000-0000-0000-000000000031');
+select tests.affects($$delete from storage.objects where name = 'p/in-gallery.webp'$$, 0, 'a file cannot be deleted while a gallery entry points at it');
+select tests.eq(public.delete_gallery_photo((select id from public.gallery_images where title = 'In gallery')), 'p/in-gallery.webp', 'removing an unused photo hands back its file to delete');
+select tests.affects($$delete from storage.objects where name = 'p/in-gallery.webp'$$, 1, 'and now the file can go');
+select tests.eq(public.delete_gallery_photo((select id from public.gallery_images where title = 'Also in a story')), null, 'a photo a story still uses is removed from the gallery but its file is kept');
+select tests.affects($$delete from storage.objects where name = 'p/gallery-and-story.webp'$$, 0, 'and the file cannot be deleted');
+select tests.eq(tests.count('select 1 from public.gallery_images'), 0::bigint, 'both gallery entries are gone');
+select tests.logout();
+
+-- ------------------------------------------------------------ deleting staff roster entries
+select tests.logout();
+insert into public.staff_members (slug, name, photo_url) values
+  ('del-plain', 'Del Plain', null),
+  ('del-other', 'Del Other', null),
+  ('del-linked-writer', 'Del Linked Writer', null),
+  ('del-linked-admin', 'Del Linked Admin', null),
+  ('del-photo-free', 'Del Photo Free', 'https://x.test/storage/v1/object/public/media/roster/free.webp'),
+  ('del-photo-used', 'Del Photo Used', 'https://x.test/storage/v1/object/public/media/roster/used.webp');
+update public.profiles set staff_member_id = (select id from public.staff_members where slug = 'del-linked-writer') where id = '00000000-0000-0000-0000-000000000024';
+update public.profiles set staff_member_id = (select id from public.staff_members where slug = 'del-linked-admin') where id = '00000000-0000-0000-0000-000000000025';
+insert into public.articles (slug, title, section_id, status, published_at, created_by, byline_ids, cover_image_url) values
+  ('credited', 'Credited story', 'school-news', 'published', now() - interval '2 days', '00000000-0000-0000-0000-000000000004',
+   array[(select id from public.staff_members where slug = 'del-plain'), (select id from public.staff_members where slug = 'del-other')],
+   'https://x.test/storage/v1/object/public/media/roster/used.webp');
+create temp table roster_before as select last_edited_at from public.articles where slug = 'credited';
+grant select on roster_before to public;
+
+-- only admins can delete roster entries
+select tests.login('00000000-0000-0000-0000-000000000003');   -- section leader
+select tests.fails($$select public.delete_staff_member((select id from public.staff_members where slug = 'del-plain'))$$, 'a section leader cannot delete roster entries', 'permission');
+select tests.login('00000000-0000-0000-0000-000000000004');   -- writer
+select tests.fails($$select public.delete_staff_member((select id from public.staff_members where slug = 'del-plain'))$$, 'a writer cannot delete roster entries', 'permission');
+select tests.logout();
+select tests.eq(tests.count($$select 1 from public.staff_members where slug = 'del-plain'$$), 1::bigint, 'and nothing was deleted');
+
+-- a plain admin deletes an ordinary entry: the byline is cleaned up, the story is not "edited"
+select tests.login('00000000-0000-0000-0000-000000000025', 'aal2');
+select tests.eq(public.delete_staff_member((select id from public.staff_members where slug = 'del-plain')), null, 'an admin deletes a roster entry (no portrait file to clean up)');
+select tests.eq(tests.count($$select 1 from public.staff_members where slug = 'del-plain'$$), 0::bigint, 'the entry is gone');
+select tests.eq((select byline_ids = array[(select id from public.staff_members where slug = 'del-other')] from public.articles where slug = 'credited'), true, 'they are taken off the story''s byline, others stay');
+select tests.eq((select a.last_edited_at = b.last_edited_at from public.articles a, roster_before b where a.slug = 'credited'), true, 'removing a byline does not count as editing the story');
+select tests.eq((select title from public.articles where slug = 'credited'), 'Credited story', 'and the story itself is untouched');
+
+-- a linked login account survives, just unlinked
+select public.delete_staff_member((select id from public.staff_members where slug = 'del-linked-writer'));
+select tests.eq((select staff_member_id from public.profiles where id = '00000000-0000-0000-0000-000000000024'), null::uuid, 'a linked account is unlinked');
+select tests.eq((select active and role = 'writer' from public.profiles where id = '00000000-0000-0000-0000-000000000024'), true, 'but kept, with its role');
+
+-- portrait files: handed back for removal only when nothing else uses them
+select tests.eq(public.delete_staff_member((select id from public.staff_members where slug = 'del-photo-free')), 'roster/free.webp', 'an unused portrait file is reported for removal');
+select tests.eq(public.delete_staff_member((select id from public.staff_members where slug = 'del-photo-used')), null, 'a portrait file a story still uses is kept');
+
+-- an entry linked to an admin account needs a super admin
+select tests.fails($$select public.delete_staff_member((select id from public.staff_members where slug = 'del-linked-admin'))$$, 'a plain admin cannot delete an entry linked to an admin account', 'super admin');
+select tests.login('00000000-0000-0000-0000-000000000021', 'aal2');
+select public.delete_staff_member((select id from public.staff_members where slug = 'del-linked-admin'));
+select tests.eq(tests.count($$select 1 from public.staff_members where slug = 'del-linked-admin'$$), 0::bigint, 'a super admin can');
+select tests.eq((select staff_member_id from public.profiles where id = '00000000-0000-0000-0000-000000000025'), null::uuid, 'and the admin account is only unlinked');
+select tests.eq(tests.count($$select 1 from public.audit_log where table_name = 'staff_members' and op = 'DELETE'$$) >= 4, true, 'deletions are in the activity log');
+select tests.logout();
+
+-- ------------------------------------------------------------ temporary passwords expire (new accounts only)
+select tests.logout();
+insert into auth.users (id, email, encrypted_password) values
+  ('00000000-0000-0000-0000-000000000071', 'fresh.temp@example.test', 'hash-fresh'),
+  ('00000000-0000-0000-0000-000000000072', 'stale.temp@example.test', 'hash-stale'),
+  ('00000000-0000-0000-0000-000000000073', 'existing@example.test', 'hash-existing'),
+  ('00000000-0000-0000-0000-000000000074', 'chose.own@example.test', 'hash-chose'),
+  ('00000000-0000-0000-0000-000000000075', 'stale.admin@example.test', 'hash-stale-admin');
+insert into auth.sessions (user_id) values
+  ('00000000-0000-0000-0000-000000000072'), ('00000000-0000-0000-0000-000000000072'), ('00000000-0000-0000-0000-000000000073');
+insert into public.profiles (id, email, display_name, role, sections, active, temp_password_expires_at) values
+  ('00000000-0000-0000-0000-000000000071', 'fresh.temp@example.test', 'Fresh Temp', 'writer', '{sports}', true, now() + interval '10 minutes'),
+  ('00000000-0000-0000-0000-000000000072', 'stale.temp@example.test', 'Stale Temp', 'writer', '{sports}', true, now() - interval '1 minute'),
+  ('00000000-0000-0000-0000-000000000073', 'existing@example.test', 'Existing', 'writer', '{sports}', true, null),
+  ('00000000-0000-0000-0000-000000000074', 'chose.own@example.test', 'Chose Own', 'writer', '{sports}', true, now() + interval '10 minutes'),
+  ('00000000-0000-0000-0000-000000000075', 'stale.admin@example.test', 'Stale Admin', 'admin', '{}', true, now() - interval '1 minute');
+select tests.logout();
+
+-- before the deadline the account works like any other; after it, it has no access at all
+select tests.login('00000000-0000-0000-0000-000000000071');
+select tests.eq(private.is_staff(), true, 'a new account works while its temporary password is fresh');
+select tests.login('00000000-0000-0000-0000-000000000072');
+select tests.eq(private.is_staff(), false, 'once the deadline passes the account has no access, even with a session still open');
+select tests.fails($$insert into public.articles (slug, title, section_id, created_by) values ('expired-try','x','sports','00000000-0000-0000-0000-000000000072')$$, 'and cannot write a story', 'row-level security');
+select tests.login('00000000-0000-0000-0000-000000000075', 'aal2');
+select tests.eq(public.is_admin(), false, 'an admin account past its deadline has no admin rights either');
+select tests.login('00000000-0000-0000-0000-000000000073');
+select tests.eq(private.is_staff(), true, 'accounts that already existed are not affected');
+
+-- nobody can start, stop or change the clock through the API
+select tests.login('00000000-0000-0000-0000-000000000072');
+select tests.fails($$update public.profiles set temp_password_expires_at = null where id = auth.uid()$$, 'an expired account cannot lift its own block', 'permission denied');
+select tests.login('00000000-0000-0000-0000-000000000011', 'aal2');
+select tests.fails($$update public.profiles set temp_password_expires_at = null where id = '00000000-0000-0000-0000-000000000072'$$, 'not even an admin can edit the clock directly', 'permission denied');
+select tests.logout();
+
+-- the job: only expired, unrevoked clocks; makes the password useless; ends sessions; leaves everyone else alone
+select tests.eq(private.expire_temp_passwords(), 2, 'the job expires every overdue temporary password (the writer and the admin)');
+select tests.eq((select encrypted_password <> 'hash-stale' from auth.users where id = '00000000-0000-0000-0000-000000000072'), true, 'the old password no longer works');
+select tests.eq((select length(encrypted_password) > 20 from auth.users where id = '00000000-0000-0000-0000-000000000072'), true, 'it is replaced by an unknown random one');
+select tests.eq(tests.count($$select 1 from auth.sessions where user_id = '00000000-0000-0000-0000-000000000072'$$), 0::bigint, 'and their sessions are ended');
+select tests.eq(tests.count($$select 1 from auth.sessions where user_id = '00000000-0000-0000-0000-000000000073'$$), 1::bigint, 'other people''s sessions are not');
+select tests.eq((select encrypted_password from auth.users where id = '00000000-0000-0000-0000-000000000071'), 'hash-fresh', 'a fresh temporary password is untouched');
+select tests.eq((select encrypted_password from auth.users where id = '00000000-0000-0000-0000-000000000073'), 'hash-existing', 'so is an account that never had a clock');
+select tests.eq((select temp_password_revoked_at is not null from public.profiles where id = '00000000-0000-0000-0000-000000000072'), true, 'the account is marked as revoked');
+select tests.eq((select temp_password_expires_at < now() from public.profiles where id = '00000000-0000-0000-0000-000000000072'), true, 'and stays blocked: the job''s own password change does not lift it');
+select tests.eq(tests.count($$select 1 from public.audit_log where summary = 'temporary password expired for stale.temp@example.test'$$), 1::bigint, 'it is written to the activity log');
+select tests.eq(private.expire_temp_passwords(), 0, 'running the job again does nothing');
+select tests.eq(tests.count($$select 1 from public.audit_log where summary like '%temp_password%'$$), 0::bigint, 'and the clock columns never show up as "changed account" entries');
+select tests.login('00000000-0000-0000-0000-000000000072');
+select tests.eq(private.is_staff(), false, 'still no access after the job ran');
+select tests.logout();
+
+-- choosing a real password stops the clock; an admin's reset lifts the block (the new temporary password does not expire)
+update auth.users set encrypted_password = 'hash-chose-own' where id = '00000000-0000-0000-0000-000000000074';
+select tests.eq((select temp_password_expires_at is null and temp_password_revoked_at is null from public.profiles where id = '00000000-0000-0000-0000-000000000074'), true, 'setting a password ends the countdown');
+update auth.users set encrypted_password = 'hash-admin-reset' where id = '00000000-0000-0000-0000-000000000072';
+select tests.eq((select temp_password_expires_at is null and temp_password_revoked_at is null from public.profiles where id = '00000000-0000-0000-0000-000000000072'), true, 'an admin''s password reset lifts the block');
+select tests.login('00000000-0000-0000-0000-000000000072');
+select tests.eq(private.is_staff(), true, 'and the account works again');
+select tests.logout();
+update auth.users set raw_user_meta_data = '{"x":1}' where id = '00000000-0000-0000-0000-000000000071';
+select tests.eq((select temp_password_expires_at is not null from public.profiles where id = '00000000-0000-0000-0000-000000000071'), true, 'other account changes do not stop the clock');
+
+rollback;
+\echo ALL RLS TESTS PASSED

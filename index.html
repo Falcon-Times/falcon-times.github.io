@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Falcon Times | Avon High School Student Newspaper</title>
+    <meta name="description" content="The Falcon Times is the student newspaper of Avon High School — school news, sports, opinion, culture, photo and video, written by students for students." />
+    <meta name="theme-color" content="#002855" />
+    <meta property="og:title" content="The Falcon Times" />
+    <meta property="og:description" content="The student voice of Avon High School." />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script>
+      // Apply the saved colour theme before first paint to avoid a flash.
+      try { var t = localStorage.getItem('falcon-theme'); if (t) { t = JSON.parse(t); if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); } } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="app" style="display: contents"></div>
+    <noscript><p style="padding: 2rem; font-family: sans-serif">The Falcon Times needs JavaScript to load stories. Please enable it and refresh.</p></noscript>
+    <script type="module" src="/src/site/main.tsx"></script>
+  </body>
+</html>

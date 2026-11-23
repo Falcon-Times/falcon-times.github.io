@@ -1,0 +1,200 @@
+# Setup guide
+
+Everything here is point-and-click except pasting a few values. Budget about 30 minutes.
+
+**What you'll end up with:** the site on GitHub Pages, a Supabase project holding the data and
+logins, and a handful of GitHub Secrets connecting the two.
+
+> **About secrets.** Two values in this setup look like keys but are *public by design* —
+> the Supabase **URL** and **anon (publishable) key** are compiled into every web page, exactly
+> like any other Supabase site. They can't do anything the database's security rules don't
+> allow. We still keep them out of the code and supply them from GitHub Secrets so the repo
+> stays clean and you can rotate them. Everything actually sensitive — the **service-role
+> key**, your **database password** and your **access token** — is never committed and never
+> reaches a browser.
+
+## 1. Create the Supabase project
+
+1. Sign up at <https://supabase.com> (free) and **New project**. Pick a region near Connecticut
+   (e.g. *East US (N. Virginia)*).
+2. Choose a strong **database password** and save it in your password manager — you'll need it in step 3.
+3. When creating the project, in the **Security** section choose:
+
+   | Setting | Choose | Why |
+   | --- | --- | --- |
+   | Enable Data API | **On** | the site talks to the database through it |
+   | Automatically expose new tables | **Off** (recommended) | nothing is reachable unless the migrations grant it — they grant exactly what the site needs (the setup also works if you leave it on) |
+   | Enable automatic RLS | **On** | any table added later starts locked down (row-level security on) until you write a policy |
+
+   These can be changed later under **Project Settings → Data API**.
+4. When it's ready, note these (all under **Project Settings**):
+   * **Project URL** — *API* page, looks like `https://abcdxyz.supabase.co`
+   * **Project ref** — the `abcdxyz` part of that URL
+   * **anon / publishable key** — *API Keys* page (the one marked *public* / *anon*; **not** `service_role`/secret)
+
+## 2. Lock down sign-ups and set password rules
+
+Under **Authentication** in the Supabase dashboard:
+
+* **Sign In / Providers →** turn **off** *Allow new users to sign up*.
+  Accounts are created only by an admin from the admin panel.
+* **Sign In / Providers → Email →** set *Minimum password length* to **12** and *Password requirements*
+  to **Lowercase, uppercase letters and digits**. The sign-in screens already explain and check exactly
+  these rules; if you ever change them in the dashboard, update
+  `supabase/functions/_shared/passwordPolicy.ts` to match (Supabase is the authority, that file just
+  produces the friendly messages). If you also turn on **Require current password when updating**, that works:
+  the password screens ask for the current one (after signing in with a temporary password the app already
+  knows it, so first-time setup doesn't ask twice; "Account security" always does).
+* **Multi-Factor →** make sure **TOTP** is enabled (it is by default).
+  Admins are required to use it; other members may opt in.
+* Optional: **Attack Protection →** enable CAPTCHA or leaked-password protection if your plan offers it.
+
+## 3. Create the GitHub Secrets
+
+In this repository: **Settings → Secrets and variables → Actions → New repository secret**. Add:
+
+| Secret | Value | Used for |
+| --- | --- | --- |
+| `SUPABASE_URL` | Project URL from step 1 | building the site (public value) |
+| `SUPABASE_ANON_KEY` | anon / publishable key from step 1 | building the site (public value) |
+| `SUPABASE_PROJECT_REF` | the project ref | deploying the database & function |
+| `SUPABASE_DB_PASSWORD` | database password from step 1 | applying migrations |
+| `SUPABASE_ACCESS_TOKEN` | a personal access token from <https://supabase.com/dashboard/account/tokens> | the Supabase CLI in Actions |
+
+## 4. Deploy the database and the account function
+
+1. Go to **Actions → "Deploy database & functions" → Run workflow**.
+2. It applies the files in `supabase/migrations/` (tables, security rules, storage bucket, starter
+   sections/roster/settings/quotes/poll/welcome story) and deploys the `admin-users` Edge Function.
+
+<details><summary>Prefer to do it by hand?</summary>
+
+In Supabase's **SQL Editor**, run **every** file in `supabase/migrations/` in filename order (oldest first;
+skip any you've already run). The `admin-users` function must be deployed with the Supabase CLI (3.x):
+`supabase functions deploy admin-users --no-verify-jwt --remote=<project ref>` (CLI 2.x used `--project-ref <ref>`
+instead of `--remote=<ref>`).
+</details>
+
+## 5. Turn on GitHub Pages from Actions
+
+**Settings → Pages → Build and deployment → Source: GitHub Actions.**
+Then merge to `main` (or run **Actions → "Deploy site" → Run workflow**). The site appears at
+<https://thefalcontimes.org> within a couple of minutes (or `https://falcon-times.github.io` until a custom
+domain is set up; GitHub redirects that address to the custom domain once there is one).
+
+### Custom domain
+
+The site's own address isn't written into the code: pages, assets and links are all relative to wherever it is
+served, so it works the same on `thefalcontimes.org`, on the `github.io` address or on a test server. To use a
+custom domain: set it under **Settings → Pages → Custom domain** (tick **Enforce HTTPS** once it's available) and
+add the DNS records GitHub lists at your registrar. A `CNAME` file isn't needed because the site is deployed by
+GitHub Actions. Things that are tied to the *address* rather than the code:
+
+* People sign in again on the new address (browser sign-ins, the "already voted" memory and the saved light/dark
+  choice are stored per address), and an unsaved story draft kept in a browser on the old address doesn't follow.
+  Ask writers to save or submit drafts before the switch.
+* Optional: in Supabase → **Authentication → URL Configuration**, set **Site URL** to the new address. This site doesn't send
+  Supabase emails, so nothing breaks if you don't.
+
+## 6. Create the first super admin (you)
+
+1. Supabase dashboard → **Authentication → Users → Add user → Create new user**.
+   Enter your email and a strong password, and tick **Auto Confirm User**.
+2. **SQL Editor** → run (with your real email and name):
+
+   ```sql
+   select public.bootstrap_super_admin('you@example.com', 'Your Name');
+   ```
+3. Open `https://thefalcontimes.org/admin/`, sign in, and follow the prompt to scan a QR code
+   with an authenticator app (Google Authenticator, Authy, 1Password…). Admin access only works
+   after this second step.
+
+> **Super admin vs admin.** Like Google Workspace, a **super admin** can do everything an **admin** can *and* is the
+> only one who can create, promote, demote, disable, delete or reset admin-level accounts (admins and other super
+> admins). Admins run the site day to day — content, settings, writers and section leaders — but can't change who
+> the admins are. Keep two super admins if you can; the last one can't be removed. (Sites set up before this role
+> existed: the first admin ever created was promoted automatically — check **People & access**. To promote
+> someone else from the SQL editor: `select public.bootstrap_super_admin('them@example.com');`.)
+
+> **Lost your authenticator?** In the Supabase dashboard go to *Authentication → Users*, open your
+> user and delete the MFA factor; you'll be asked to enrol a new one at next sign-in. Keep a second
+> admin account (another trusted person) as a backup.
+
+## 7. Add everyone else
+
+In the admin panel → **People & access → Add account**.
+
+| Person | Role | Sections |
+| --- | --- | --- |
+| Section leaders (School News, Sports, Opinion + Advice, Culture + Entertainment, Social Media, Photography + Video) | **Section leader** | their own section |
+| Reporters, designers | **Writer** | the section(s) they write for |
+| Photographers | **Photographer** — sees every story, can change only its photos (cover photo, description, caption, credit), never the writing; uploads to the shared **Photo gallery** that writers pick from | (none) |
+| Trusted site administrators | **Admin** (only a super admin can create these) | (all) |
+| Whoever owns the site's accounts (a teacher/advisor, a second owner) | **Super admin** | (all) |
+
+* Each person gets **their own login**. The system generates a one-time temporary password that you
+  hand over in person; they must choose their own at first sign-in. **A new account's temporary password
+  works for 15 minutes.** If it runs out first, the account shows *Temp password expired* in the People list and
+  can't be used until you open it and choose *Reset password* (that password does not expire). This is
+  enforced in the database (access stops at the deadline) and by a job that runs every minute using the
+  `pg_cron` extension, which the migration enables on Supabase. If the deploy log shows a warning that the job was
+  not scheduled, enable *Database → Extensions → pg_cron* and run the `cron.schedule(...)` line from the warning once.
+* *Link a staff profile* so they can edit their own bio and photo from **My profile**.
+* Share [docs/CONTENT-GUIDE.md](CONTENT-GUIDE.md) and the address `https://thefalcontimes.org/newsroom/` with them.
+* To disable someone (graduated, left the club) use **Manage → Account enabled**. Their stories stay.
+* **Which button?** In **Manage** each account action says what it does; in short:
+
+  | Problem | Use | What happens |
+  | --- | --- | --- |
+  | Forgot their **password** | *Reset password* | Replaces it with a one-time temporary password you hand over; they choose their own at next sign-in. Two-factor is untouched. |
+  | Forgot their **phone** today | *Create bypass code* | A one-time code gets them past the authenticator step once. Password and authenticator stay as they are. |
+  | Lost the authenticator **for good** | *Reset two-factor* | Removes the authenticator; they set up a new one. Password is untouched. |
+
+* **Lost phone or forgot the authenticator?** Open their row (**Manage → Two-factor bypass code**), choose how
+  long the code is valid (15 minutes to 24 hours) and press *Create bypass code*. Read them the 10 digits
+  (shown once, e.g. `482-915-7306`). On the two-factor screen they pick *Can't use your authenticator?*, type
+  the code, and are in — their authenticator stays set up, so you don't need to reset it. A code works
+  **once**, only for that person, only after they've entered their own password, and dies after 5 wrong
+  guesses. The session it unlocks lasts 8 hours. Every code made or used is in the Activity log. Use
+  *Reset two-factor* instead only if the device is gone for good.
+  *(An admin can't make a code for themselves — ask another admin. If the only admin loses their
+  authenticator, recover with the SQL editor: `delete from auth.mfa_factors where user_id = (select id from auth.users where email = 'you@example.org');`
+  then sign in and set up a new authenticator.)*
+
+## 8. Make it yours (admin panel)
+
+* **Site settings** — tagline, the club's public contact email (leave blank to hide), social links,
+  editorial standards. *Put the club email here, not in the code.*
+* **Staff roster** — the public "Meet the newsroom" list and who can be credited in a byline. Add
+  bios and photos (or let people add their own). Anyone whose **Title is exactly “Editor”** appears in the front
+  page's *Meet our editors* section (above *Meet our section leaders*, which lists whoever leads a team); the
+  section is hidden while nobody has that title. *Delete* removes someone for good: the dialog first says how
+  many stories credit them (they're taken off those bylines; the stories stay) and whether a login account is
+  linked (it is kept, just unlinked). *Unlist instead* hides them without deleting.
+* **Sections & menu** — rename sections, edit the dropdown sub-sections, reorder, or hide a team.
+* **Scoreboard / Polls / Announcement bar / Daily Spark quotes** — also available to section leaders.
+
+## Day-to-day
+
+* **Activity log** (admin) shows who changed what.
+* **Backups:** Supabase's dashboard (*Database → Backups*) has daily backups on paid plans. On the
+  free plan, occasionally export the `articles` and `staff_members` tables from *Table Editor*.
+* **Free-tier pause:** Supabase pauses projects it considers idle after about a week, and plain API reads
+  turned out not to count (the project got a pause warning while the old read-only workflow was running).
+  The "Keep Supabase awake" workflow now runs **daily** and does a small database write (`public.keepalive()`),
+  a read, an auth call and a storage call — see `scripts/keepalive.sh`. It's a mitigation, **not a
+  guarantee**: only a paid Supabase plan prevents pausing. Keep GitHub Actions enabled, and if that workflow
+  ever fails, GitHub emails the repo admins — look at it. If the project is paused anyway, unpause it from the
+  dashboard (possible for 90 days after the pause date, per Supabase's notice); the public site keeps showing
+  its built-in starter content meanwhile, but sign-in, the panels and polls are down.
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+| --- | --- |
+| Site shows "backend is not connected" | `SUPABASE_URL` / `SUPABASE_ANON_KEY` secrets missing or the site hasn't been rebuilt since adding them. Re-run **Deploy site**. |
+| "Only admins who have signed in with two-factor…" | You're signed in without the 2FA step. Sign out and back in, enter the 6-digit code. |
+| Sign-in works but "Your account has not been given access" | The account has no profile — create people through *People & access*, or run `bootstrap_admin` for the first admin. |
+| A section leader can't publish | Their account needs the section ticked under *Sections*. |
+| Can't create accounts ("Failed to send a request to the Edge Function") | Re-run **Deploy database & functions**; confirm the three Supabase secrets exist. |
+| Photos won't upload | Check the `media` bucket exists (Storage) — it's created by migration `…02_storage.sql`. Photos can only be uploaded by photographers, admins and the Photography + Video leader, and must be at least 1200×800 pixels. |
